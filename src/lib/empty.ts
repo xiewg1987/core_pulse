@@ -1,0 +1,84 @@
+import type { MetricsPayload } from "./types";
+
+/** Empty shell for client loading — no demo hardware numbers. */
+export function emptyMetrics(): MetricsPayload {
+  return {
+    mock: false,
+    timestamp: 0,
+    host: {
+      name: "…",
+      os: "…",
+      cpu: "…",
+      ram: "…",
+      gpu: "…",
+      uptime: "…",
+    },
+    clock: "--:--:--",
+    status: [],
+    health: { score: 0, load: 0, temp: null },
+    cpu: {
+      percent: 0,
+      peak: 0,
+      avg: 0,
+      history: [],
+      speedGhz: null,
+    },
+    memory: {
+      percent: 0,
+      peak: 0,
+      avg: 0,
+      usedGb: 0,
+      totalGb: 0,
+      availableGb: 0,
+      history: [],
+    },
+    disk: {
+      percent: 0,
+      volumesSummary: "—",
+      cPercent: 0,
+      dPercent: 0,
+      readMBps: 0,
+      writeMBps: 0,
+    },
+    gpu: {
+      percent: 0,
+      peak: 0,
+      avg: 0,
+      history: [],
+      vramUsedGb: null,
+      vramTotalGb: null,
+      temp: null,
+      powerW: null,
+    },
+    power: {
+      mode: "AC",
+      plugged: true,
+      drawW: null,
+      ratedW: null,
+    },
+    network: {
+      downMbps: 0,
+      upMbps: 0,
+      latencyMs: null,
+      rxBytesToday: null,
+      txBytesToday: null,
+      historyDown: [],
+      historyUp: [],
+    },
+    temps: [
+      { id: "cpu", label: "CPU", celsius: null, max: 95 },
+      { id: "gpu", label: "GPU", celsius: null, max: 90 },
+      { id: "mb", label: "主板", celsius: null, max: 85 },
+      { id: "ssd", label: "SSD", celsius: null, max: 80 },
+    ],
+    diskIO: {
+      readMBps: 0,
+      writeMBps: 0,
+      peak: 0,
+      historyRead: [],
+      historyWrite: [],
+    },
+    storage: [],
+    processes: [],
+  };
+}
