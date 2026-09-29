@@ -34,7 +34,7 @@ export function Chip({
 }) {
   return (
     <span
-      className={`inline-flex max-w-full items-center gap-1 truncate rounded-full border px-[0.7em] font-semibold tracking-wide backdrop-blur-[16px] ${toneClass[tone]} ${
+      className={`inline-flex max-w-full items-center gap-1 truncate rounded-none border px-[0.7em] font-semibold tracking-wide backdrop-blur-[16px] ${toneClass[tone]} ${
         solid ? "bg-[rgba(255,43,214,0.22)]" : "bg-[var(--chip)]"
       }`}
       style={{
@@ -83,9 +83,9 @@ export function Bar({
   const pct = Math.max(0, Math.min(100, (value / max) * 100));
   const bg = fill || color;
   return (
-    <div className={`h-[5px] w-full overflow-hidden rounded-full bg-white/10 ${className}`}>
+    <div className={`h-[5px] w-full overflow-hidden rounded-none bg-white/10 ${className}`}>
       <div
-        className="h-full rounded-full transition-[width] duration-500"
+        className="h-full rounded-none transition-[width] duration-500"
         style={{
           width: `${pct}%`,
           background: bg,

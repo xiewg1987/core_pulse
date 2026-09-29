@@ -112,7 +112,6 @@ function smartLabel(
 function buildStatus(args: {
   load: number;
   diskPct: number;
-  maxTemp: number | null;
 }): StatusChip[] {
   const perf: StatusChip =
     args.load >= 90
@@ -128,23 +127,13 @@ function buildStatus(args: {
         ? { label: "磁盘偏高", tone: "warn" }
         : { label: "磁盘正常", tone: "ok" };
 
-  const heat: StatusChip =
-    args.maxTemp == null
-      ? { label: "温度暂无", tone: "accent" }
-      : args.maxTemp >= 90
-        ? { label: "过热风险", tone: "crit" }
-        : args.maxTemp >= 80
-          ? { label: "温度偏高", tone: "warn" }
-          : { label: "无过热", tone: "ok" };
-
-  return [perf, disk, heat, { label: "风扇暂无", tone: "accent" }];
+  return [perf, disk];
 }
 
-function healthScore(load: number, memPct: number, maxTemp: number | null): number {
+function healthScore(load: number, memPct: number): number {
   let score = 100;
   score -= Math.max(0, load - 40) * 0.35;
   score -= Math.max(0, memPct - 60) * 0.4;
-  if (maxTemp != null) score -= Math.max(0, maxTemp - 65) * 0.8;
   return Math.round(Math.min(99, Math.max(1, score)));
 }
 
@@ -657,13 +646,8 @@ async function collectOnce(): Promise<MetricsPayload> {
     { id: "ssd", label: "SSD", celsius: ssdTempFromLayout(diskLayout), max: 80 },
   ];
 
-  const maxTemp = temps
-    .map((t) => t.celsius)
-    .filter((t): t is number => t != null)
-    .reduce<number | null>((m, v) => (m == null || v > m ? v : m), null);
-
   const loadPct = load.currentLoad || 0;
-  const score = healthScore(loadPct, memPct, maxTemp);
+  const score = healthScore(loadPct, memPct);
 
   const gpuUtilRaw =
     nvidiaSnap?.utilization != null && nvidiaSnap.utilization >= 0
@@ -736,7 +720,7 @@ async function collectOnce(): Promise<MetricsPayload> {
       uptime: formatUptime(time.uptime || 0),
     },
     clock: formatClock(),
-    status: buildStatus({ load: loadPct, diskPct, maxTemp }),
+    status: buildStatus({ load: loadPct, diskPct }),
     health: {
       score,
       load: cpuPct,

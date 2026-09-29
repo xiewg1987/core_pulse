@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import Link from "next/link";
 import {
   ArcGauge,
   Bar,
@@ -13,17 +12,7 @@ import {
 } from "@/components/ui";
 import { endProcessGroup } from "@/actions/metrics";
 import type { MetricsPayload } from "@/lib/types";
-
-const APPS: { label: string; color: string }[] = [
-  { label: "浏览器", color: "rgba(255,43,214,0.35)" },
-  { label: "文件", color: "rgba(168,85,255,0.35)" },
-  { label: "终端", color: "rgba(46,230,166,0.35)" },
-  { label: "笔记", color: "rgba(255,176,32,0.35)" },
-  { label: "聊天", color: "rgba(255,43,214,0.35)" },
-  { label: "音乐", color: "rgba(168,85,255,0.35)" },
-  { label: "设置", color: "rgba(230,220,230,0.25)" },
-  { label: "商店", color: "rgba(255,43,214,0.3)" },
-];
+import { QuickLaunchCard } from "@/components/QuickLaunchCard";
 
 function fmt(n: number | null | undefined, digits = 0): string {
   if (n == null || Number.isNaN(n)) return "—";
@@ -153,11 +142,13 @@ function PowerSessionCard({
   memRows,
   onKill,
   killingKey,
+  onOpenProcesses,
 }: {
   cpuRows: MetricsPayload["processesCpu"];
   memRows: MetricsPayload["processesMem"];
   onKill?: (row: MetricsPayload["processesCpu"][number]) => void;
   killingKey?: string | null;
+  onOpenProcesses?: (originEl?: HTMLElement | null) => void;
 }) {
   return (
     <Glass className="card-pad flex min-h-0 min-w-0 flex-col overflow-hidden">
@@ -193,9 +184,13 @@ function PowerSessionCard({
           killingKey={killingKey}
         />
       </div>
-      <Link href="/processes" className="all-proc-btn">
+      <button
+        type="button"
+        className="all-proc-btn"
+        onClick={(e) => onOpenProcesses?.(e.currentTarget)}
+      >
         全部进程
-      </Link>
+      </button>
     </Glass>
   );
 }
@@ -214,7 +209,7 @@ function IconBtn({
       type="button"
       title={title}
       onClick={onClick}
-      className="flex shrink-0 items-center justify-center rounded-full border border-white/15 bg-white/5 text-white/70 transition hover:border-pink/40 hover:text-pink"
+      className="flex shrink-0 items-center justify-center rounded-none border border-white/15 bg-white/5 text-white/70 transition hover:border-pink/40 hover:text-pink"
       style={{
         width: "clamp(1.6rem, 3.2vh, 2.1rem)",
         height: "clamp(1.6rem, 3.2vh, 2.1rem)",
@@ -254,28 +249,19 @@ export function MonitorDashboard({
   ready,
   err,
   refresh,
+  onOpenProcesses,
 }: {
   data: MetricsPayload;
   ready: boolean;
   err: string | null;
   refresh: () => void | Promise<void>;
+  onOpenProcesses?: (originEl?: HTMLElement | null) => void;
 }) {
   const [killingKey, setKillingKey] = useState<string | null>(null);
   const [killMsg, setKillMsg] = useState<{ text: string; ok: boolean } | null>(null);
   const [, startTransition] = useTransition();
 
-  const storageHeader = data.storage.some(
-    (s) => s.smartTone === "warn" || s.smartTone === "crit",
-  )
-    ? "注意"
-    : data.storage.every((s) => s.smart === "未知")
-      ? "—"
-      : data.storage.length
-        ? "正常"
-        : "暂无";
-
-  const storageTone =
-    storageHeader === "注意" ? "text-[#FFB020]" : storageHeader === "正常" ? "text-[#2EE6A6]" : "text-white/40";
+  const storageHeader = data.storage.length ? `${data.storage.length} 盘` : "暂无";
 
   const cpuRows = padProcRows(data.processesCpu, 5);
   const memRows = padProcRows(data.processesMem, 5);
@@ -325,7 +311,7 @@ export function MonitorDashboard({
                 </h1>
                 {data.mock ? (
                   <span
-                    className="shrink-0 rounded-full border border-[#FFB020]/40 px-1.5 text-[#FFB020]"
+                    className="shrink-0 rounded-none border border-[#FFB020]/40 px-1.5 text-[#FFB020]"
                     style={{ fontSize: "var(--fs-xs)" }}
                   >
                     MOCK
@@ -367,12 +353,6 @@ export function MonitorDashboard({
                     <polyline points="21 3 21 9 15 9" />
                   </svg>
                 </IconBtn>
-                <IconBtn title="主题">
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <circle cx="12" cy="12" r="4" />
-                    <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />
-                  </svg>
-                </IconBtn>
               </div>
             </div>
 
@@ -402,6 +382,7 @@ export function MonitorDashboard({
             memRows={memRows}
             onKill={handleKill}
             killingKey={killingKey}
+            onOpenProcesses={onOpenProcesses}
           />
 
           <div className="grid min-h-0 min-w-0 grid-cols-2 grid-rows-2 gap-[var(--gap)] overflow-hidden">
@@ -561,7 +542,7 @@ export function MonitorDashboard({
               实时流量
             </div>
             <span
-              className="mt-[0.35em] inline-flex items-center gap-1 rounded-full border border-[rgba(46,230,166,0.4)] bg-[var(--chip)] px-2 text-[#2EE6A6]"
+              className="mt-[0.35em] inline-flex items-center gap-1 rounded-none border border-[rgba(46,230,166,0.4)] bg-[var(--chip)] px-2 text-[#2EE6A6]"
               style={{ fontSize: "var(--fs-xs)", height: "clamp(1.1rem,2.4vh,1.4rem)" }}
             >
               <span className="live-dot">●</span> LIVE
@@ -598,29 +579,14 @@ export function MonitorDashboard({
         <section className="grid min-h-0 min-w-0 grid-cols-3 gap-[var(--gap)] overflow-hidden">
           <HostDescCard host={data.host} />
 
-          <Glass className="card-pad flex min-h-0 min-w-0 flex-col overflow-hidden">
-            <h2
-              className="mb-[clamp(0.3rem,0.8vh,0.5rem)] shrink-0 truncate text-[#5C4A6E]"
-              style={{ fontSize: "var(--fs-sm)" }}
-            >
-              快捷启动
-            </h2>
-            <div className="quick-launch-grid">
-              {APPS.map((app) => (
-                <button key={app.label} type="button" className="app-tile">
-                  <span className="app-icon" style={{ background: app.color }} />
-                  <span className="truncate max-w-full">{app.label}</span>
-                </button>
-              ))}
-            </div>
-          </Glass>
+          <QuickLaunchCard />
 
           <Glass className="card-pad flex min-h-0 min-w-0 flex-col overflow-hidden">
             <div className="mb-[clamp(0.35rem,0.9vh,0.55rem)] flex shrink-0 items-center justify-between gap-2 overflow-hidden">
               <h2 className="truncate text-[#5C4A6E]" style={{ fontSize: "var(--fs-sm)" }}>
                 存储
               </h2>
-              <span className={`shrink-0 ${storageTone}`} style={{ fontSize: "var(--fs-sm)" }}>
+              <span className="shrink-0 text-white/40" style={{ fontSize: "var(--fs-sm)" }}>
                 {storageHeader}
               </span>
             </div>
@@ -651,6 +617,7 @@ export function MonitorDashboard({
                             vol.totalGb >= 100 ? Math.round(vol.totalGb) : vol.totalGb.toFixed(0)
                           } GB`;
                     const dense = data.storage.length >= 4;
+                    const ioLabel = `读 ${fmt(vol.readMBps, 0)} MB/s  ·  写 ${fmt(vol.writeMBps, 0)} MB/s`;
                     return (
                       <div
                         key={vol.id}
@@ -658,12 +625,20 @@ export function MonitorDashboard({
                         style={{ gap: dense ? "0.2rem" : "0.35rem" }}
                       >
                         <div className="flex items-center justify-between gap-2 overflow-hidden">
-                          <span
-                            className="min-w-0 truncate font-medium text-[#F2E5F5]"
-                            style={{ fontSize: dense ? "var(--fs-sm)" : "var(--fs-md)" }}
-                          >
-                            {title}
-                          </span>
+                          <div className="flex min-w-0 items-baseline gap-2 overflow-hidden">
+                            <span
+                              className="shrink-0 font-medium text-[#F2E5F5]"
+                              style={{ fontSize: dense ? "var(--fs-sm)" : "var(--fs-md)" }}
+                            >
+                              {title}
+                            </span>
+                            <span
+                              className="min-w-0 truncate text-[#B2A6BF]"
+                              style={{ fontSize: "var(--fs-xs)" }}
+                            >
+                              {ioLabel}
+                            </span>
+                          </div>
                           <span
                             className="shrink-0 truncate text-[#B2A6BF]"
                             style={{ fontSize: "var(--fs-xs)" }}
@@ -681,12 +656,6 @@ export function MonitorDashboard({
                   })}
                 </div>
               )}
-              <div
-                className="mt-[clamp(0.35rem,0.8vh,0.55rem)] shrink-0 truncate text-[#B2A6BF]"
-                style={{ fontSize: "var(--fs-xs)" }}
-              >
-                读 {fmt(data.diskIO.readMBps, 0)} MB/s  ·  写 {fmt(data.diskIO.writeMBps, 0)} MB/s
-              </div>
             </div>
           </Glass>
         </section>

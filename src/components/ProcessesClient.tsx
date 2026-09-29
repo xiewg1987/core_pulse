@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import { endProcessGroup, getProcessList } from "@/actions/metrics";
 import { Glass } from "@/components/ui";
@@ -23,7 +22,7 @@ function IconBtn({
       type="button"
       title={title}
       onClick={onClick}
-      className="flex shrink-0 items-center justify-center rounded-full border border-white/15 bg-white/5 text-white/70 transition hover:border-pink/40 hover:text-pink"
+      className="flex shrink-0 items-center justify-center rounded-none border border-white/15 bg-white/5 text-white/70 transition hover:border-pink/40 hover:text-pink"
       style={{
         width: "clamp(1.6rem, 3.2vh, 2.1rem)",
         height: "clamp(1.6rem, 3.2vh, 2.1rem)",
@@ -48,7 +47,7 @@ function memClass(mb: number): string {
   return mb >= 700 ? "text-[#FFB020]" : "text-[#80738C]";
 }
 
-export function ProcessesClient() {
+export function ProcessesClient({ onBack }: { onBack?: () => void }) {
   const [data, setData] = useState<ProcessListPayload | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [query, setQuery] = useState("");
@@ -99,6 +98,13 @@ export function ProcessesClient() {
   }, [data, query, sort, filter]);
 
   const handleKill = (row: ProcessListItem) => {
+    if (
+      !window.confirm(
+        `确认结束进程「${row.imageName}」(PID ${row.pid}${row.pids.length > 1 ? ` 等 ${row.pids.length} 个` : ""})？`,
+      )
+    ) {
+      return;
+    }
     setKillingPid(row.pid);
     setKillMsg(null);
     startTransition(() => {
@@ -131,9 +137,9 @@ export function ProcessesClient() {
       <div className="monitor-frame processes-frame">
         <header className="processes-topbar">
           <div className="processes-left">
-            <Link href="/" className="processes-back">
+            <button type="button" className="processes-back" onClick={onBack}>
               ← 本机监控
-            </Link>
+            </button>
             <div className="min-w-0 overflow-hidden">
               <h1
                 className="truncate font-semibold tracking-wide text-[#F8F0FF]"
@@ -163,12 +169,6 @@ export function ProcessesClient() {
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M21 12a9 9 0 1 1-2.64-6.36" />
                 <polyline points="21 3 21 9 15 9" />
-              </svg>
-            </IconBtn>
-            <IconBtn title="主题">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <circle cx="12" cy="12" r="4" />
-                <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />
               </svg>
             </IconBtn>
           </div>

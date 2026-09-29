@@ -55,8 +55,6 @@ export function buildMockMetrics(): MetricsPayload {
     status: [
       { label: "性能正常", tone: "ok" },
       { label: "磁盘正常", tone: "ok" },
-      { label: "负载平稳", tone: "ok" },
-      { label: "风扇安静", tone: "accent" },
     ],
     health: {
       score: 87,

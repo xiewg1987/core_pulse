@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { LoadingScreen, type LoadingPhase } from "@/components/LoadingScreen";
 import { MonitorDashboard } from "@/components/MonitorDashboard";
+import { PageTransition } from "@/components/PageTransition";
+import { ProcessesClient } from "@/components/ProcessesClient";
 import { useSystemMetrics } from "@/hooks/useSystemMetrics";
 
 const POLL_MS = 1500;
@@ -39,11 +41,19 @@ export function HomeClient() {
 
   return (
     <div className="monitor-enter">
-      <MonitorDashboard
-        data={metrics.data}
-        ready={metrics.ready}
-        err={metrics.err}
-        refresh={metrics.refresh}
+      <PageTransition
+        monitor={({ openProcesses }) => (
+          <MonitorDashboard
+            data={metrics.data}
+            ready={metrics.ready}
+            err={metrics.err}
+            refresh={metrics.refresh}
+            onOpenProcesses={openProcesses}
+          />
+        )}
+        processes={({ backToMonitor }) => (
+          <ProcessesClient onBack={backToMonitor} />
+        )}
       />
     </div>
   );

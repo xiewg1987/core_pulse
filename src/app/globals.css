@@ -83,7 +83,7 @@ body {
   background: var(--panel);
   backdrop-filter: blur(clamp(16px, 3vh, 32px));
   -webkit-backdrop-filter: blur(clamp(16px, 3vh, 32px));
-  border-radius: clamp(10px, 1.2vw, 18px);
+  border-radius: 0;
   box-shadow: var(--shadow);
   border: 1px solid transparent;
   background-clip: padding-box;
@@ -227,7 +227,7 @@ body {
   align-items: center;
   height: clamp(1.1rem, 2.2vh, 1.35rem);
   padding: 0 0.45em;
-  border-radius: 999px;
+  border-radius: 0;
   border: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(22, 11, 36, 0.55);
   color: var(--text-secondary);
@@ -253,7 +253,7 @@ body {
   justify-content: center;
   gap: 0.3rem;
   padding: 0.4rem 0.25rem 0.35rem;
-  border-radius: 12px;
+  border-radius: 0;
   background: rgba(30, 20, 51, 0.7);
   border: 1px solid rgba(255, 255, 255, 0.04);
   color: #f2e6f8;
@@ -270,21 +270,186 @@ body {
   width: clamp(1.5rem, 2.8vh, 2rem);
   height: clamp(1.5rem, 2.8vh, 2rem);
   flex-shrink: 0;
-  border-radius: 10px;
+  border-radius: 0;
   opacity: 0.9;
 }
 
 .quick-launch-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  grid-auto-rows: max-content;
-  align-content: start;
-  align-items: start;
+  display: flex;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  align-items: flex-start;
+  justify-content: flex-start;
   gap: clamp(0.3rem, 0.8vh, 0.5rem);
   min-height: 0;
   flex: 1;
   overflow-x: hidden;
   overflow-y: auto;
+}
+
+.quick-add,
+.quick-item {
+  display: flex;
+  width: clamp(4.4rem, 22%, 5.1rem);
+  min-width: 4.4rem;
+  height: clamp(4.25rem, 9.2vh, 4.85rem);
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  padding: 0.45rem 0.3rem 0.4rem;
+  border-radius: 0;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.quick-add {
+  background: rgba(22, 11, 36, 0.18);
+  border: 1.5px dashed rgba(255, 43, 214, 0.45);
+  color: #ff2bd6;
+}
+
+.quick-add:hover:not(:disabled) {
+  background: rgba(255, 43, 214, 0.08);
+  border-color: rgba(255, 43, 214, 0.7);
+}
+
+.quick-add:disabled,
+.quick-item:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+
+.quick-add-plus {
+  font-size: clamp(1.35rem, 2.8vh, 1.75rem);
+  font-weight: 500;
+  line-height: 1;
+  color: #ff2bd6;
+}
+
+.quick-add-caption {
+  font-size: 0.5625rem;
+  line-height: 1.1;
+  color: #5c4a6e;
+}
+
+.quick-item {
+  background: rgba(31, 20, 51, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #f2e5f5;
+}
+
+.quick-item:hover:not(:disabled) {
+  border-color: rgba(255, 43, 214, 0.35);
+  background: rgba(40, 24, 64, 0.85);
+}
+
+.quick-item-icon {
+  width: clamp(1.5rem, 2.8vh, 2rem);
+  height: clamp(1.5rem, 2.8vh, 2rem);
+  flex-shrink: 0;
+  border-radius: 0;
+}
+
+.quick-item-label {
+  font-size: var(--fs-xs);
+  line-height: 1.1;
+  max-width: 100%;
+}
+
+.quick-add-modal {
+  position: absolute;
+  inset: 0;
+  z-index: 8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.75rem;
+  background: rgba(5, 3, 10, 0.72);
+  backdrop-filter: blur(8px);
+}
+
+.quick-add-sheet {
+  width: min(100%, 18rem);
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  padding: 0.85rem 0.9rem;
+  border-radius: 0;
+  border: 1px solid rgba(255, 43, 214, 0.28);
+  background: rgba(22, 11, 36, 0.95);
+  box-shadow: 0 18px 40px -6px rgba(0, 0, 0, 0.4);
+}
+
+.quick-add-title {
+  margin: 0;
+  color: #f8f0ff;
+  font-size: var(--fs-md);
+  font-weight: 600;
+}
+
+.quick-add-hint {
+  margin: 0;
+  color: #5c4a6e;
+  font-size: var(--fs-xs);
+  line-height: 1.35;
+}
+
+.quick-add-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  color: #9b87b0;
+  font-size: var(--fs-xs);
+}
+
+.quick-add-field input {
+  width: 100%;
+  height: 2rem;
+  padding: 0 0.55rem;
+  border-radius: 0;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(5, 3, 10, 0.55);
+  color: #f2e5f5;
+  font-size: var(--fs-sm);
+  outline: none;
+}
+
+.quick-add-field input:focus {
+  border-color: rgba(255, 43, 214, 0.45);
+}
+
+.quick-add-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.45rem;
+  margin-top: 0.15rem;
+}
+
+.quick-add-cancel,
+.quick-add-submit {
+  height: 1.85rem;
+  padding: 0 0.7rem;
+  border-radius: 0;
+  font-size: var(--fs-sm);
+  cursor: pointer;
+}
+
+.quick-add-cancel {
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: transparent;
+  color: #b2a6bf;
+}
+
+.quick-add-submit {
+  border: 1px solid rgba(255, 43, 214, 0.45);
+  background: rgba(255, 43, 214, 0.2);
+  color: #ff9ae8;
+}
+
+.quick-add-submit:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .power-btn {
@@ -298,7 +463,7 @@ body {
   justify-content: center;
   gap: 0.05rem;
   padding: 0.2rem 0.2rem;
-  border-radius: 10px;
+  border-radius: 0;
   background: rgba(30, 20, 51, 0.75);
   border: 1px solid rgba(255, 255, 255, 0.16);
   color: #f2e6f8;
@@ -369,7 +534,7 @@ body {
   justify-content: center;
   min-height: clamp(2.2rem, 4.6vh, 2.6rem);
   height: clamp(2.2rem, 4.6vh, 2.6rem);
-  border-radius: 8px;
+  border-radius: 0;
   background: rgba(30, 20, 51, 0.75);
   border: 1px solid rgba(255, 255, 255, 0.12);
   color: #f2e6f8;
@@ -419,13 +584,14 @@ body {
   justify-content: center;
   height: 1.75rem;
   padding: 0 0.65rem;
-  border-radius: 999px;
+  border-radius: 0;
   border: 1px solid rgba(255, 43, 214, 0.4);
   background: rgba(22, 11, 36, 0.55);
   color: #ff2bd6;
   font-size: var(--fs-sm);
   text-decoration: none;
   white-space: nowrap;
+  cursor: pointer;
   transition: border-color 0.15s ease, background 0.15s ease;
 }
 
@@ -455,7 +621,7 @@ body {
   min-width: 8rem;
   height: 2.25rem;
   padding: 0 0.9rem;
-  border-radius: 10px;
+  border-radius: 0;
   border: 1px solid rgba(255, 255, 255, 0.12);
   background: rgba(22, 11, 36, 0.7);
   color: var(--text);
@@ -485,7 +651,7 @@ body {
 .processes-pill {
   height: 1.75rem;
   padding: 0 0.65rem;
-  border-radius: 8px;
+  border-radius: 0;
   border: 1px solid rgba(255, 255, 255, 0.1);
   background: rgba(22, 11, 36, 0.4);
   color: #f2e5f5;
@@ -502,7 +668,7 @@ body {
 .processes-filter {
   height: 1.75rem;
   padding: 0 0.5rem;
-  border-radius: 8px;
+  border-radius: 0;
   border: 1px solid transparent;
   background: transparent;
   color: var(--muted);
@@ -583,7 +749,7 @@ body {
 .processes-kind {
   flex-shrink: 0;
   padding: 0.05rem 0.3rem;
-  border-radius: 4px;
+  border-radius: 0;
   background: rgba(168, 85, 255, 0.12);
   color: rgba(168, 85, 255, 0.55);
   font-size: calc(var(--fs-xs) * 0.9);
@@ -596,7 +762,7 @@ body {
   justify-content: center;
   height: clamp(1.15rem, 2.2vh, 1.4rem);
   padding: 0 0.45rem;
-  border-radius: 6px;
+  border-radius: 0;
   border: 1px solid rgba(255, 43, 214, 0.55);
   background: transparent;
   color: rgba(255, 43, 214, 0.7);
@@ -898,7 +1064,7 @@ body {
   margin-top: clamp(2rem, 6vh, 3.5rem);
   width: min(100%, 28rem);
   padding: 1rem 1.5rem;
-  border-radius: 18px;
+  border-radius: 0;
   display: flex;
   flex-direction: column;
   gap: 0.85rem;
@@ -908,7 +1074,7 @@ body {
   height: 3px;
   width: 100%;
   overflow: hidden;
-  border-radius: 999px;
+  border-radius: 0;
   background: rgba(255, 255, 255, 0.1);
 }
 
@@ -962,5 +1128,69 @@ body {
   }
   to {
     opacity: 1;
+  }
+}
+
+/* —— View transition: monitor ↔ processes (scale from 全部进程 button) —— */
+
+.view-stage {
+  position: relative;
+  height: 100dvh;
+  max-height: 100dvh;
+  width: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  --view-ox: 16%;
+  --view-oy: 52%;
+  --view-ms: 480ms;
+  --view-ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+.view-stage.is-busy {
+  pointer-events: none;
+}
+
+.view-layer {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  transform-origin: var(--view-ox) var(--view-oy);
+  will-change: transform, opacity;
+  backface-visibility: hidden;
+  transition:
+    transform var(--view-ms) var(--view-ease),
+    opacity var(--view-ms) var(--view-ease);
+}
+
+.view-layer--monitor {
+  z-index: 1;
+  transform: scale(1) translate3d(0, 0, 0);
+  opacity: 1;
+}
+
+.view-layer--monitor.is-recessed {
+  transform: scale(0.72) translate3d(5%, -4%, 0);
+  opacity: 0.22;
+  pointer-events: none;
+}
+
+.view-layer--processes {
+  z-index: 2;
+  transform: scale(0.35) translate3d(-2%, 5%, 0);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.view-layer--processes.is-shown {
+  transform: scale(1) translate3d(0, 0, 0);
+  opacity: 1;
+  pointer-events: auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* Shorten only — stripping transform made the switch look like a hard cut on
+     Windows machines with「动画效果」off (prefers-reduced-motion: reduce). */
+  .view-stage {
+    --view-ms: 220ms;
   }
 }

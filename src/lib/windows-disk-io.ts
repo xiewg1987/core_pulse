@@ -17,8 +17,8 @@ export type WindowsDiskRates = {
 };
 
 /**
- * Windows PhysicalDisk rates via performance counters.
- * Instance names look like "2 c:" / "0 d: e:" — letters map to volumes.
+ * Windows LogicalDisk rates via performance counters (per drive letter).
+ * Instance names look like "C:" / "D:" / "_Total".
  */
 export async function windowsDiskByteRates(): Promise<WindowsDiskRates | null> {
   if (process.platform !== "win32") return null;
@@ -31,8 +31,8 @@ export async function windowsDiskByteRates(): Promise<WindowsDiskRates | null> {
         "-Command",
         [
           "$samples = (Get-Counter -Counter @(",
-          "  '\\PhysicalDisk(*)\\Disk Read Bytes/sec',",
-          "  '\\PhysicalDisk(*)\\Disk Write Bytes/sec'",
+          "  '\\LogicalDisk(*)\\Disk Read Bytes/sec',",
+          "  '\\LogicalDisk(*)\\Disk Write Bytes/sec'",
           ") -MaxSamples 1).CounterSamples;",
           "$samples | ForEach-Object {",
           "  $kind = if ($_.Path -match 'disk read bytes') { 'r' } else { 'w' };",
@@ -54,28 +54,36 @@ export async function windowsDiskByteRates(): Promise<WindowsDiskRates | null> {
       const value = Number(valueRaw);
       if (!Number.isFinite(value) || value < 0) continue;
 
-      const instance = instanceRaw.toLowerCase();
-      if (instance === "_total") {
+      const instance = instanceRaw.trim();
+      const lower = instance.toLowerCase();
+      if (lower === "_total") {
         if (kind === "r") total = { ...total, readBps: value };
         else total = { ...total, writeBps: value };
         continue;
       }
 
-      const letters = [...instance.matchAll(/\b([a-z]):/g)].map((m) => m[1].toUpperCase());
-      if (!letters.length) continue;
-      // Split bytes evenly across letters on the same physical disk.
-      const share = value / letters.length;
-      for (const letter of letters) {
-        const cur = byLetter[letter] || { readBps: 0, writeBps: 0 };
-        if (kind === "r") cur.readBps += share;
-        else cur.writeBps += share;
-        byLetter[letter] = cur;
-      }
+      // Prefer "C:" style; skip HarddiskVolume* / mount-point instances.
+      const letterMatch = instance.match(/^([A-Za-z]):$/);
+      if (!letterMatch) continue;
+      const letter = letterMatch[1].toUpperCase();
+      const cur = byLetter[letter] || { readBps: 0, writeBps: 0 };
+      if (kind === "r") cur.readBps = value;
+      else cur.writeBps = value;
+      byLetter[letter] = cur;
     }
 
     if (Object.keys(byLetter).length === 0 && total.readBps === 0 && total.writeBps === 0) {
       return null;
     }
+
+    // If _Total is missing, sum letters.
+    if (total.readBps === 0 && total.writeBps === 0) {
+      for (const rate of Object.values(byLetter)) {
+        total.readBps += rate.readBps;
+        total.writeBps += rate.writeBps;
+      }
+    }
+
     return { total, byLetter };
   } catch {
     /* unavailable */
