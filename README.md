@@ -11,8 +11,8 @@ npm install
 npm run dev
 ```
 
-- 本机预览：`http://localhost:3000`
-- iPad：`http://<这台电脑的局域网IP>:3000`（横屏）
+- 本机预览：`http://localhost:47821`
+- iPad：`http://<这台电脑的局域网IP>:47821`（横屏）
 
 生产：
 
@@ -21,7 +21,9 @@ npm run build
 npm run start
 ```
 
-`dev` / `start` 已绑定 `0.0.0.0:3000`，便于局域网访问。
+`dev` / `start` 已绑定 `0.0.0.0:47821`，便于局域网访问。
+
+开机自启可用根目录 `start-core-pulse.bat`：放到「启动」文件夹，或用任务计划程序在登录时运行。首次会自动 `npm install` / `npm run build`（若尚无产物）。
 
 ### 查局域网 IP
 
@@ -29,14 +31,14 @@ npm run start
 ipconfig
 ```
 
-看「以太网」或「WLAN」的 IPv4，例如 `192.168.1.23`，iPad 打开 `http://192.168.1.23:3000`。
+看「以太网」或「WLAN」的 IPv4，例如 `192.168.1.23`，iPad 打开 `http://192.168.1.23:47821`。
 
 ### 防火墙
 
-若 iPad 打不开，放行 3000 端口（管理员 PowerShell）：
+若 iPad 打不开，放行 47821 端口（管理员 PowerShell）：
 
 ```powershell
-New-NetFirewallRule -DisplayName "Core Pulse" -Direction Inbound -Protocol TCP -LocalPort 3000 -Action Allow
+New-NetFirewallRule -DisplayName "Core Pulse" -Direction Inbound -Protocol TCP -LocalPort 47821 -Action Allow
 ```
 
 或在「允许应用通过防火墙」里勾选 Node.js。
