@@ -15,10 +15,14 @@ export interface TempRow {
 export interface StorageVolume {
   id: string;
   letter: string;
+  /** Volume label, e.g. "990" */
+  label: string | null;
   usedGb: number;
   totalGb: number;
   unit: "GB" | "TB";
   percent: number;
+  readMBps: number;
+  writeMBps: number;
   smart: "正常" | "注意" | "未知";
   smartTone: StatusTone;
   accent: "orange" | "purple";
@@ -33,7 +37,34 @@ export interface MetricSeries {
 
 export interface ProcessRow {
   name: string;
+  /** Executable image for taskkill, e.g. "Cursor.exe". */
+  imageName: string;
+  /** PIDs aggregated into this row (app group). */
+  pids: number[];
+  /** CPU% or memory working-set share of physical RAM. */
   percent: number;
+  /** Aggregated working set, megabytes (memory list only). */
+  usedMb?: number;
+}
+
+export type ProcessKind = "应用" | "系统" | "后台";
+
+/** Full process table row (全部进程 page). */
+export interface ProcessListItem {
+  name: string;
+  imageName: string;
+  pid: number;
+  pids: number[];
+  cpuPercent: number;
+  usedMb: number;
+  kind: ProcessKind;
+}
+
+export interface ProcessListPayload {
+  mock: boolean;
+  timestamp: number;
+  clock: string;
+  processes: ProcessListItem[];
 }
 
 export interface MetricsPayload {
@@ -100,5 +131,6 @@ export interface MetricsPayload {
     historyWrite: number[];
   };
   storage: StorageVolume[];
-  processes: ProcessRow[];
+  processesCpu: ProcessRow[];
+  processesMem: ProcessRow[];
 }

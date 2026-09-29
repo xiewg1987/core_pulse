@@ -9,9 +9,20 @@ import {
   toMiBps,
 } from "./format";
 import { record, seriesStats } from "./history-store";
-import { buildMockMetrics } from "./mock";
+import { buildMockMetrics, buildMockProcessList } from "./mock";
 import { windowsDiskByteRates } from "./windows-disk-io";
-import type { MetricsPayload, ProcessRow, StatusChip, StorageVolume, TempRow } from "./types";
+import { windowsNvidiaGpu } from "./windows-gpu";
+import { windowsProcessPrivateMem, type ProcMemSnap } from "./windows-proc-mem";
+import type {
+  MetricsPayload,
+  ProcessKind,
+  ProcessListItem,
+  ProcessListPayload,
+  ProcessRow,
+  StatusChip,
+  StorageVolume,
+  TempRow,
+} from "./types";
 
 export function mockAllowed(): boolean {
   return process.env.NODE_ENV === "development" && process.env.USE_MOCK === "1";
@@ -53,16 +64,28 @@ function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T
   });
 }
 
+function gpuScore(g: si.Systeminformation.GraphicsControllerData): number {
+  const model = `${g.vendor || ""} ${g.model || ""}`;
+  if (/oray|idd|virtual|basic render|remote|parsec|indirect|microsoft basic|meta virtual/i.test(model)) {
+    return -100;
+  }
+  let score = 0;
+  // Prefer discrete NVIDIA / AMD over iGPU (Intel often appears first in the list).
+  if (/nvidia|geforce|rtx|quadro|tesla/i.test(model)) score += 100;
+  if (/amd|radeon|\brx\b/i.test(model)) score += 90;
+  if (/intel.*arc/i.test(model)) score += 80;
+  if (/intel|uhd|iris/i.test(model)) score += 20;
+  if (typeof g.memoryTotal === "number" && g.memoryTotal > 2048) score += 15;
+  else if (typeof g.vram === "number" && g.vram > 2048) score += 10;
+  if (typeof g.utilizationGpu === "number" && g.utilizationGpu >= 0) score += 5;
+  if (g.bus === "PCI") score += 5;
+  return score;
+}
+
 function pickGpu(controllers: si.Systeminformation.GraphicsControllerData[]) {
   const list = controllers || [];
-  const skip = /oray|idd|virtual|basic render|remote|parsec|indirect|microsoft basic/i;
-  const preferred = list.find(
-    (g) =>
-      /nvidia|amd|radeon|geforce|rtx|rx|intel.*graphics|uhd|iris|arc/i.test(g.model || "") &&
-      !skip.test(g.model || ""),
-  );
-  if (preferred) return preferred;
-  return list.find((g) => g.model && !skip.test(g.model)) || list[0];
+  if (!list.length) return undefined;
+  return [...list].sort((a, b) => gpuScore(b) - gpuScore(a))[0];
 }
 
 function volumeLetter(mount: string): string {
@@ -193,12 +216,248 @@ function cleanCpuBrand(brand: string): string {
     .slice(0, 36);
 }
 
+/** Kernel processes that are not meaningful "end process" targets. */
+const SKIP_PROCESS = new Set([
+  "system idle process",
+  "system",
+  "registry",
+  "memory compression",
+  "secure system",
+]);
+
+/**
+ * Windows service / shell hosts — Task Manager "Apps" folds these into the parent app
+ * (e.g. MiniMax Code's node.exe children show under MiniMax, not as node.exe).
+ */
+const ROLLUP_HOST = new Set([
+  "node.exe",
+  "cmd.exe",
+  "powershell.exe",
+  "pwsh.exe",
+  "conhost.exe",
+  "runtimebroker.exe",
+  "dllhost.exe",
+  "werfault.exe",
+  "openidictionary.exe",
+  "crashpad_handler.exe",
+  "git.exe",
+  "bash.exe",
+]);
+
+/** Background Windows processes — hide from the memory "Apps" style top list. */
+const HIDE_FROM_MEM_TOP = new Set([
+  "svchost.exe",
+  "services.exe",
+  "lsass.exe",
+  "csrss.exe",
+  "wininit.exe",
+  "winlogon.exe",
+  "smss.exe",
+  "fontdrvhost.exe",
+  "dwm.exe",
+  "sihost.exe",
+  "taskhostw.exe",
+  "explorer.exe",
+  "shellexperiencehost.exe",
+  "startmenuexperiencehost.exe",
+  "searchhost.exe",
+  "searchindexer.exe",
+  "securityhealthservice.exe",
+  "msmpeng.exe",
+  "nissrv.exe",
+  "wudfhost.exe",
+  "memory compression",
+  "registry",
+  "system",
+  "idle",
+]);
+
+type ProcSnap = {
+  name?: string;
+  pid?: number;
+  parentPid?: number;
+  cpu?: number;
+  mem?: number;
+  memRss?: number;
+};
+
+function normalizeProcName(name?: string): string | null {
+  const raw = String(name || "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!raw) return null;
+  if (SKIP_PROCESS.has(raw.toLowerCase())) return null;
+  return raw.slice(0, 28);
+}
+
+function displayProcName(name: string): string {
+  // Task Manager style: "MiniMax Code.exe" → "MiniMax Code"
+  return name.replace(/\.exe$/i, "").trim() || name;
+}
+
+/**
+ * Attribute helper hosts (node/cmd/…) to the nearest real app ancestor,
+ * matching Task Manager Apps (MiniMax owns its node children).
+ * System processes are skipped, not rolled into siblings.
+ */
+function resolveAppName(
+  proc: { name?: string; pid?: number; parentPid?: number },
+  byPid: Map<number, { name?: string; pid?: number; parentPid?: number }>,
+): string | null {
+  const selfName = normalizeProcName(proc.name);
+  if (!selfName) return null;
+  const selfKey = selfName.toLowerCase();
+
+  if (HIDE_FROM_MEM_TOP.has(selfKey)) return null;
+  if (!ROLLUP_HOST.has(selfKey)) return selfName;
+
+  let cur: { name?: string; pid?: number; parentPid?: number } | undefined = proc;
+  const seen = new Set<number>();
+  for (let i = 0; i < 12 && cur; i++) {
+    const pid = typeof cur.pid === "number" ? cur.pid : -1;
+    if (pid >= 0) {
+      if (seen.has(pid)) break;
+      seen.add(pid);
+    }
+    const name = normalizeProcName(cur.name);
+    if (!name) break;
+    const key = name.toLowerCase();
+    if (HIDE_FROM_MEM_TOP.has(key)) return null;
+    if (!ROLLUP_HOST.has(key)) return name;
+    const parentPid = cur.parentPid;
+    if (typeof parentPid !== "number" || parentPid <= 0) break;
+    cur = byPid.get(parentPid);
+  }
+  return null;
+}
+
+/**
+ * Top programs by CPU / memory.
+ * Memory prefers Windows Working-Set-Private (Task Manager column).
+ */
+function topProcessesByCpu(list: ProcSnap[], limit = 5): ProcessRow[] {
+  const byPid = new Map<number, ProcSnap>();
+  for (const p of list) {
+    if (typeof p.pid === "number") byPid.set(p.pid, p);
+  }
+  const grouped = new Map<
+    string,
+    { name: string; imageName: string; cpu: number; pids: number[] }
+  >();
+  for (const p of list) {
+    const imageName = resolveAppName(p, byPid) || normalizeProcName(p.name);
+    if (!imageName) continue;
+    if (HIDE_FROM_MEM_TOP.has(imageName.toLowerCase())) continue;
+    const cpu = typeof p.cpu === "number" && p.cpu > 0 ? p.cpu : 0;
+    if (cpu <= 0) continue;
+    const key = imageName.toLowerCase();
+    const cur = grouped.get(key) || {
+      name: displayProcName(imageName),
+      imageName,
+      cpu: 0,
+      pids: [],
+    };
+    cur.cpu += cpu;
+    if (typeof p.pid === "number" && p.pid > 0) cur.pids.push(p.pid);
+    grouped.set(key, cur);
+  }
+  return [...grouped.values()]
+    .sort((a, b) => b.cpu - a.cpu)
+    .slice(0, limit)
+    .map((p) => ({
+      name: p.name,
+      imageName: p.imageName,
+      pids: [...new Set(p.pids)],
+      percent: Math.max(0, Math.round(p.cpu)),
+    }));
+}
+
+function topProcessesByMemory(
+  list: ProcSnap[],
+  totalBytes: number,
+  limit = 5,
+  privateMem: ProcMemSnap[] | null = null,
+): ProcessRow[] {
+  type Row = { name?: string; pid?: number; parentPid?: number; bytes: number };
+  const rows: Row[] = privateMem?.length
+    ? privateMem.map((p) => ({
+        name: p.name,
+        pid: p.pid,
+        parentPid: p.parentPid,
+        bytes: p.privateBytes,
+      }))
+    : list.map((p) => ({
+        name: p.name,
+        pid: p.pid,
+        parentPid: p.parentPid,
+        // memRss is KiB Working Set — fallback only
+        bytes: typeof p.memRss === "number" && p.memRss > 0 ? p.memRss * 1024 : 0,
+      }));
+
+  const byPid = new Map<number, Row>();
+  for (const p of rows) {
+    if (typeof p.pid === "number") byPid.set(p.pid, p);
+  }
+
+  const grouped = new Map<
+    string,
+    { name: string; imageName: string; bytes: number; pids: number[] }
+  >();
+  for (const p of rows) {
+    const imageName = resolveAppName(p, byPid);
+    if (!imageName) continue;
+    if (HIDE_FROM_MEM_TOP.has(imageName.toLowerCase())) continue;
+    if (p.bytes <= 0) continue;
+    const key = imageName.toLowerCase();
+    const cur = grouped.get(key) || {
+      name: displayProcName(imageName),
+      imageName,
+      bytes: 0,
+      pids: [],
+    };
+    cur.bytes += p.bytes;
+    if (typeof p.pid === "number" && p.pid > 0) cur.pids.push(p.pid);
+    grouped.set(key, cur);
+  }
+
+  return [...grouped.values()]
+    .sort((a, b) => b.bytes - a.bytes)
+    .slice(0, limit)
+    .map((p) => {
+      const usedMb = p.bytes / (1024 * 1024);
+      const percent =
+        totalBytes > 0 ? Math.max(0, Math.round((p.bytes / totalBytes) * 100)) : 0;
+      return {
+        name: p.name,
+        imageName: p.imageName,
+        pids: [...new Set(p.pids)],
+        percent,
+        usedMb: Number(usedMb.toFixed(usedMb >= 100 ? 0 : 1)),
+      };
+    });
+}
+
 async function collectOnce(): Promise<MetricsPayload> {
   const now = Date.now();
   const staticInfo = await getStatic();
 
-  const [memInfo, load, time, fsSize, netStatsRaw, fsStats, temp, graphics, cpuSpeed, battery, winDisk, procs] =
-    await Promise.all([
+  const [
+    memInfo,
+    load,
+    time,
+    fsSize,
+    netStatsRaw,
+    fsStats,
+    temp,
+    graphics,
+    cpuSpeed,
+    battery,
+    winDisk,
+    nvidiaSnap,
+    winProcMem,
+    procs,
+    blockDevices,
+  ] = await Promise.all([
       withTimeout(
         si.mem(),
         2500,
@@ -234,11 +493,14 @@ async function collectOnce(): Promise<MetricsPayload> {
             acConnected: true,
           } as si.Systeminformation.BatteryData),
       withTimeout(windowsDiskByteRates(), 3500, null),
+      withTimeout(windowsNvidiaGpu(), 2500, null),
+      withTimeout(windowsProcessPrivateMem(), 8000, null),
       withTimeout(
         si.processes(),
         3000,
         { list: [] } as unknown as si.Systeminformation.ProcessesData,
       ),
+      withTimeout(si.blockDevices(), 2500, [] as si.Systeminformation.BlockDevicesData[]),
     ]);
 
   // First poll: prime networkStats so rx_sec is populated (si needs 2 samples)
@@ -249,7 +511,6 @@ async function collectOnce(): Promise<MetricsPayload> {
   }
 
   const gpu = pickGpu(graphics.controllers || []);
-
   // Match Windows Task Manager: GiB, used ≈ total - available
   const totalBytes = memInfo.total || 0;
   const availableBytes = memInfo.available || 0;
@@ -266,6 +527,13 @@ async function collectOnce(): Promise<MetricsPayload> {
     .filter((f) => /^[A-Za-z]:/.test(f.mount) && f.size > 0)
     .sort((a, b) => volumeLetter(a.mount).localeCompare(volumeLetter(b.mount)));
 
+  const labelByLetter = new Map<string, string>();
+  for (const b of blockDevices || []) {
+    const letter = volumeLetter(b.mount || b.name || "");
+    const label = String(b.label || "").trim();
+    if (letter && label) labelByLetter.set(letter, label);
+  }
+
   const c = volumes.find((v) => volumeLetter(v.mount) === "C") || volumes[0];
   const d = volumes.find((v) => volumeLetter(v.mount) === "D");
   const diskLayout = staticInfo.diskLayout;
@@ -273,7 +541,7 @@ async function collectOnce(): Promise<MetricsPayload> {
   // One physical disk SMART applies to all volumes on that machine when only one SSD
   const primarySmart = smartLabel(diskLayout[0]?.smartStatus);
 
-  const storage: StorageVolume[] = volumes.slice(0, 4).map((vol, idx) => {
+  const storage: StorageVolume[] = volumes.map((vol, idx) => {
     const letter = volumeLetter(vol.mount);
     const used = toDisplayGiB(vol.used);
     const total = toDisplayGiB(vol.size);
@@ -286,10 +554,13 @@ async function collectOnce(): Promise<MetricsPayload> {
     return {
       id: letter.toLowerCase(),
       letter,
+      label: labelByLetter.get(letter) || null,
       usedGb: used.unit === "TB" ? used.value * 1024 : used.value,
       totalGb: total.unit === "TB" ? total.value * 1024 : total.value,
       unit: total.unit,
       percent,
+      readMBps: 0,
+      writeMBps: 0,
       smart: primarySmart.smart,
       smartTone: primarySmart.smartTone,
       accent: letter === "C" || idx === 0 ? "orange" : "purple",
@@ -340,15 +611,20 @@ async function collectOnce(): Promise<MetricsPayload> {
     prevNet = { iface: primary.iface, rx: rxBytes, tx: txBytes, at: Date.now() };
   }
 
-  // Disk IO: prefer si.fsStats; on Windows fall back to perf counters (MiB/s)
+  // Disk IO: prefer Windows per-disk perf counters; else si.fsStats total
   let readMBps = 0;
   let writeMBps = 0;
-  if (fsStats && typeof fsStats.rx_sec === "number" && fsStats.rx_sec >= 0) {
+  if (winDisk) {
+    readMBps = toMiBps(winDisk.total.readBps);
+    writeMBps = toMiBps(winDisk.total.writeBps);
+    for (const vol of storage) {
+      const rate = winDisk.byLetter[vol.letter];
+      vol.readMBps = rate ? Number(toMiBps(rate.readBps).toFixed(1)) : 0;
+      vol.writeMBps = rate ? Number(toMiBps(rate.writeBps).toFixed(1)) : 0;
+    }
+  } else if (fsStats && typeof fsStats.rx_sec === "number" && fsStats.rx_sec >= 0) {
     readMBps = toMiBps(fsStats.rx_sec);
     writeMBps = toMiBps(fsStats.wx_sec || 0);
-  } else if (winDisk) {
-    readMBps = toMiBps(winDisk.readBps);
-    writeMBps = toMiBps(winDisk.writeBps);
   }
 
   const cpuTempRaw =
@@ -358,9 +634,11 @@ async function collectOnce(): Promise<MetricsPayload> {
         ? Math.max(...temp.cores.filter((t): t is number => typeof t === "number" && t > 0))
         : null;
   const gpuTemp =
-    typeof gpu?.temperatureGpu === "number" && gpu.temperatureGpu > 0
-      ? gpu.temperatureGpu
-      : null;
+    nvidiaSnap?.temperature != null && nvidiaSnap.temperature > 0
+      ? nvidiaSnap.temperature
+      : typeof gpu?.temperatureGpu === "number" && gpu.temperatureGpu > 0
+        ? gpu.temperatureGpu
+        : null;
 
   const temps: TempRow[] = [
     {
@@ -387,15 +665,17 @@ async function collectOnce(): Promise<MetricsPayload> {
   const loadPct = load.currentLoad || 0;
   const score = healthScore(loadPct, memPct, maxTemp);
 
+  const gpuUtilRaw =
+    nvidiaSnap?.utilization != null && nvidiaSnap.utilization >= 0
+      ? nvidiaSnap.utilization
+      : typeof gpu?.utilizationGpu === "number" && gpu.utilizationGpu >= 0
+        ? gpu.utilizationGpu
+        : null;
+  const gpuUtil = gpuUtilRaw != null ? Math.round(gpuUtilRaw) : 0;
   const cpuPct = Math.round(loadPct);
   const cpuHistory = record("cpu", cpuPct);
   const memHistory = record("mem", memPct);
-  const gpuHistory = record(
-    "gpu",
-    typeof gpu?.utilizationGpu === "number" && gpu.utilizationGpu >= 0
-      ? Math.round(gpu.utilizationGpu)
-      : 0,
-  );
+  const gpuHistory = record("gpu", gpuUtil);
   const netDownHist = record("netDown", downMbps);
   const netUpHist = record("netUp", upMbps);
   const ioReadHist = record("ioRead", readMBps);
@@ -404,26 +684,30 @@ async function collectOnce(): Promise<MetricsPayload> {
   const cpuStats = seriesStats(cpuHistory, cpuPct);
   const memStats = seriesStats(memHistory, Math.round(memPct));
 
-  // VRAM: memoryTotal (MB) or fallback vram (MB)
+  // VRAM: prefer nvidia-smi MiB, else systeminformation memoryTotal/vram (MB)
   const vramTotalMb =
-    typeof gpu?.memoryTotal === "number" && gpu.memoryTotal > 0
-      ? gpu.memoryTotal
-      : typeof gpu?.vram === "number" && gpu.vram > 0
-        ? gpu.vram
-        : null;
+    nvidiaSnap?.memoryTotalMb != null && nvidiaSnap.memoryTotalMb > 0
+      ? nvidiaSnap.memoryTotalMb
+      : typeof gpu?.memoryTotal === "number" && gpu.memoryTotal > 0
+        ? gpu.memoryTotal
+        : typeof gpu?.vram === "number" && gpu.vram > 0
+          ? gpu.vram
+          : null;
   const vramUsedMb =
-    typeof gpu?.memoryUsed === "number" && gpu.memoryUsed >= 0 ? gpu.memoryUsed : null;
+    nvidiaSnap?.memoryUsedMb != null && nvidiaSnap.memoryUsedMb >= 0
+      ? nvidiaSnap.memoryUsedMb
+      : typeof gpu?.memoryUsed === "number" && gpu.memoryUsed >= 0
+        ? gpu.memoryUsed
+        : null;
   const vramTotalGb = vramTotalMb != null ? vramTotalMb / 1024 : null;
   const vramUsedGb = vramUsedMb != null ? vramUsedMb / 1024 : null;
-  const gpuUtil =
-    typeof gpu?.utilizationGpu === "number" && gpu.utilizationGpu >= 0
-      ? Math.round(gpu.utilizationGpu)
-      : 0;
   const gpuStats = seriesStats(gpuHistory, gpuUtil);
   const gpuPower =
-    typeof (gpu as { powerDraw?: number } | undefined)?.powerDraw === "number"
-      ? (gpu as { powerDraw: number }).powerDraw
-      : null;
+    nvidiaSnap?.powerDraw != null
+      ? nvidiaSnap.powerDraw
+      : typeof (gpu as { powerDraw?: number } | undefined)?.powerDraw === "number"
+        ? (gpu as { powerDraw: number }).powerDraw
+        : null;
 
   const plugged = staticInfo.hasBattery
     ? Boolean(battery.acConnected || battery.isCharging)
@@ -431,24 +715,14 @@ async function collectOnce(): Promise<MetricsPayload> {
 
   const speedGhz =
     typeof cpuSpeed.avg === "number" && cpuSpeed.avg > 0 ? cpuSpeed.avg : null;
-  const cpuLabel = [
-    cleanCpuBrand(staticInfo.cpuInfo.brand || "CPU"),
-    speedGhz != null ? `@ ${speedGhz.toFixed(2)}GHz` : null,
-  ]
-    .filter(Boolean)
-    .join(" ");
+  const cpuLabel = cleanCpuBrand(staticInfo.cpuInfo.brand || "CPU");
 
   const ramLabel =
     totalGiB >= 10 ? `${Math.round(totalGiB)} GB` : `${totalGiB.toFixed(1)} GB`;
 
-  const processes: ProcessRow[] = (procs.list || [])
-    .filter((p) => p.name && typeof p.cpu === "number" && p.cpu > 0)
-    .sort((a, b) => (b.cpu || 0) - (a.cpu || 0))
-    .slice(0, 3)
-    .map((p) => ({
-      name: String(p.name).replace(/\s+/g, " ").trim().slice(0, 28),
-      percent: Math.round(p.cpu || 0),
-    }));
+  const list = procs.list || [];
+  const processesCpu = topProcessesByCpu(list, 5);
+  const processesMem = topProcessesByMemory(list, totalBytes, 5, winProcMem);
 
   return {
     mock: false,
@@ -458,7 +732,7 @@ async function collectOnce(): Promise<MetricsPayload> {
       os: staticInfo.osInfo.distro || staticInfo.osInfo.codename || "Windows",
       cpu: cpuLabel,
       ram: ramLabel,
-      gpu: (gpu?.model || "暂无").replace(/\s+/g, " ").trim().slice(0, 28),
+      gpu: (nvidiaSnap?.name || gpu?.model || "暂无").replace(/\s+/g, " ").trim().slice(0, 28),
       uptime: formatUptime(time.uptime || 0),
     },
     clock: formatClock(),
@@ -526,7 +800,8 @@ async function collectOnce(): Promise<MetricsPayload> {
       historyWrite: ioWriteHist,
     },
     storage,
-    processes,
+    processesCpu,
+    processesMem,
   };
 }
 
@@ -549,4 +824,68 @@ export async function collectMetrics(): Promise<MetricsPayload> {
     });
 
   return inflight;
+}
+
+function classifyProcessKind(imageName: string): ProcessKind {
+  const key = imageName.toLowerCase();
+  if (HIDE_FROM_MEM_TOP.has(key) || key === "system" || key === "idle") return "系统";
+  if (ROLLUP_HOST.has(key)) return "后台";
+  return "应用";
+}
+
+/**
+ * Full process table for the 全部进程 page — one row per PID.
+ * Sorted by CPU desc by default (client may re-sort).
+ */
+export async function listAllProcesses(): Promise<ProcessListPayload> {
+  if (mockAllowed()) return buildMockProcessList();
+
+  const [procs, privateMem] = await Promise.all([
+    withTimeout(
+      si.processes(),
+      4000,
+      { list: [] } as unknown as si.Systeminformation.ProcessesData,
+    ),
+    withTimeout(windowsProcessPrivateMem(), 8000, null),
+  ]);
+
+  const memByPid = new Map<number, number>();
+  for (const p of privateMem || []) {
+    if (p.pid > 0) memByPid.set(p.pid, p.privateBytes);
+  }
+
+  const list = (procs.list || []) as ProcSnap[];
+  const rows: ProcessListItem[] = [];
+
+  for (const p of list) {
+    const imageName = normalizeProcName(p.name);
+    if (!imageName) continue;
+    const pid = typeof p.pid === "number" ? p.pid : 0;
+    if (pid <= 0) continue;
+
+    const cpu = typeof p.cpu === "number" && p.cpu > 0 ? p.cpu : 0;
+    const bytes =
+      memByPid.get(pid) ??
+      (typeof p.memRss === "number" && p.memRss > 0 ? p.memRss * 1024 : 0);
+    const usedMb = bytes / (1024 * 1024);
+
+    rows.push({
+      name: displayProcName(imageName),
+      imageName,
+      pid,
+      pids: [pid],
+      cpuPercent: Number(cpu.toFixed(1)),
+      usedMb: Number(usedMb.toFixed(usedMb >= 100 ? 0 : 1)),
+      kind: classifyProcessKind(imageName),
+    });
+  }
+
+  rows.sort((a, b) => b.cpuPercent - a.cpuPercent || b.usedMb - a.usedMb);
+
+  return {
+    mock: false,
+    timestamp: Date.now(),
+    clock: formatClock(),
+    processes: rows.slice(0, 200),
+  };
 }

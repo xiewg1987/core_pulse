@@ -71,18 +71,26 @@ export function Bar({
   max = 100,
   color,
   className = "",
+  fill,
 }: {
   value: number;
   max?: number;
   color: string;
   className?: string;
+  /** Optional CSS background for the fill (e.g. gradient). Falls back to `color`. */
+  fill?: string;
 }) {
   const pct = Math.max(0, Math.min(100, (value / max) * 100));
+  const bg = fill || color;
   return (
     <div className={`h-[5px] w-full overflow-hidden rounded-full bg-white/10 ${className}`}>
       <div
         className="h-full rounded-full transition-[width] duration-500"
-        style={{ width: `${pct}%`, background: color, boxShadow: `0 0 10px ${color}66` }}
+        style={{
+          width: `${pct}%`,
+          background: bg,
+          boxShadow: `0 0 10px ${color}66`,
+        }}
       />
     </div>
   );
@@ -207,8 +215,8 @@ export function ArcGauge({
             x={size / 2}
             y={size / 2 - 2}
             textAnchor="middle"
-            fill={color}
-            fontSize="11"
+            fill="#F8F0FF"
+            fontSize="13"
             fontWeight="600"
           >
             {label}

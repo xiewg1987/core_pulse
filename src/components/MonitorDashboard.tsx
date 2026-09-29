@@ -1,18 +1,18 @@
 "use client";
 
+import { useState, useTransition } from "react";
+import Link from "next/link";
 import {
   ArcGauge,
   Bar,
   Chip,
-  DualRing,
   DualWave,
   Glass,
   KpiRow,
   Sparkline,
 } from "@/components/ui";
-import { useSystemMetrics } from "@/hooks/useSystemMetrics";
-
-const POLL_MS = 1500;
+import { endProcessGroup } from "@/actions/metrics";
+import type { MetricsPayload } from "@/lib/types";
 
 const APPS: { label: string; color: string }[] = [
   { label: "浏览器", color: "rgba(255,43,214,0.35)" },
@@ -28,6 +28,176 @@ const APPS: { label: string; color: string }[] = [
 function fmt(n: number | null | undefined, digits = 0): string {
   if (n == null || Number.isNaN(n)) return "—";
   return digits > 0 ? n.toFixed(digits) : String(Math.round(n));
+}
+
+function shortGpuName(name: string): string {
+  return name
+    .replace(/^NVIDIA\s+/i, "")
+    .replace(/^GeForce\s+/i, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function HostDescCard({ host }: { host: MetricsPayload["host"] }) {
+  const rows: { label: string; value: string }[] = [
+    { label: "主机", value: host.name },
+    { label: "系统", value: host.os },
+    { label: "CPU", value: host.cpu },
+    { label: "内存", value: host.ram },
+    { label: "GPU", value: shortGpuName(host.gpu) },
+    { label: "开机", value: host.uptime },
+  ];
+  return (
+    <Glass className="card-pad flex min-h-0 min-w-0 flex-col overflow-hidden">
+      <h2
+        className="mb-[clamp(0.35rem,0.9vh,0.55rem)] shrink-0 truncate text-[#5C4A6E]"
+        style={{ fontSize: "var(--fs-sm)" }}
+      >
+        本机描述
+      </h2>
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        {rows.map((row) => (
+          <div
+            key={row.label}
+            className="flex min-h-0 flex-1 items-center justify-between gap-3 overflow-hidden"
+          >
+            <span className="shrink-0 text-[#5C4A6E]" style={{ fontSize: "var(--fs-sm)" }}>
+              {row.label}
+            </span>
+            <span
+              className="min-w-0 truncate text-right text-[#F2E5F5]"
+              style={{ fontSize: "var(--fs-sm)" }}
+              title={row.value}
+            >
+              {row.value || "—"}
+            </span>
+          </div>
+        ))}
+      </div>
+    </Glass>
+  );
+}
+
+function padProcRows(
+  rows: MetricsPayload["processesCpu"],
+  count = 5,
+): MetricsPayload["processesCpu"] {
+  const next = rows.slice(0, count);
+  while (next.length < count) {
+    next.push({ name: "—", imageName: "", pids: [], percent: 0 });
+  }
+  return next;
+}
+
+function fmtMem(mb: number | null | undefined): string {
+  if (mb == null || Number.isNaN(mb) || mb <= 0) return "—";
+  if (mb >= 1024) return `${(mb / 1024).toFixed(1)} GB`;
+  return `${mb >= 100 ? Math.round(mb) : mb.toFixed(1)} MB`;
+}
+
+function ProcColumn({
+  title,
+  rows,
+  valueMode = "percent",
+  onKill,
+  killingKey,
+}: {
+  title: string;
+  rows: MetricsPayload["processesCpu"];
+  valueMode?: "percent" | "memory";
+  onKill?: (row: MetricsPayload["processesCpu"][number]) => void;
+  killingKey?: string | null;
+}) {
+  return (
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+      <div className="mb-1 shrink-0 text-[#5C4A6E]" style={{ fontSize: "var(--fs-xs)" }}>
+        {title}
+      </div>
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        {rows.map((p, i) => {
+          const canKill = Boolean(p.imageName && p.name !== "—");
+          const key = `${p.imageName}:${p.pids.join(",")}`;
+          const busy = killingKey === key;
+          return (
+            <div
+              key={`${title}-${p.name}-${i}`}
+              className={`proc-row${i < rows.length - 1 ? " proc-row--div" : ""}`}
+            >
+              <span
+                className="min-w-0 flex-1 truncate text-white/85"
+                style={{ fontSize: "var(--fs-sm)" }}
+              >
+                {p.name}
+              </span>
+              <span className="shrink-0 text-white/40" style={{ fontSize: "var(--fs-xs)" }}>
+                {valueMode === "memory" ? fmtMem(p.usedMb) : `${p.percent}%`}
+              </span>
+              <button
+                type="button"
+                className="kill-btn"
+                disabled={!canKill || busy || !onKill}
+                onClick={() => onKill?.(p)}
+              >
+                {busy ? "…" : "结束"}
+              </button>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function PowerSessionCard({
+  cpuRows,
+  memRows,
+  onKill,
+  killingKey,
+}: {
+  cpuRows: MetricsPayload["processesCpu"];
+  memRows: MetricsPayload["processesMem"];
+  onKill?: (row: MetricsPayload["processesCpu"][number]) => void;
+  killingKey?: string | null;
+}) {
+  return (
+    <Glass className="card-pad flex min-h-0 min-w-0 flex-col overflow-hidden">
+      <h2
+        className="mb-[clamp(0.3rem,0.7vh,0.45rem)] shrink-0 truncate text-[#5C4A6E]"
+        style={{ fontSize: "var(--fs-sm)" }}
+      >
+        电源与会话
+      </h2>
+      <div className="mb-[clamp(0.35rem,0.8vh,0.55rem)] grid shrink-0 grid-cols-4 gap-1.5 overflow-hidden">
+        <button type="button" className="power-btn">
+          睡眠
+        </button>
+        <button type="button" className="power-btn">
+          锁定
+        </button>
+        <button type="button" className="power-btn power-btn--warn">
+          重启
+          <small>需确认</small>
+        </button>
+        <button type="button" className="power-btn power-btn--crit">
+          关机
+          <small>需确认</small>
+        </button>
+      </div>
+      <div className="mb-[clamp(0.35rem,0.8vh,0.55rem)] flex min-h-0 flex-1 gap-2.5 overflow-hidden">
+        <ProcColumn title="CPU" rows={cpuRows} onKill={onKill} killingKey={killingKey} />
+        <ProcColumn
+          title="内存"
+          rows={memRows}
+          valueMode="memory"
+          onKill={onKill}
+          killingKey={killingKey}
+        />
+      </div>
+      <Link href="/processes" className="all-proc-btn">
+        全部进程
+      </Link>
+    </Glass>
+  );
 }
 
 function IconBtn({
@@ -79,8 +249,20 @@ function TrendRow({
   );
 }
 
-export function MonitorDashboard() {
-  const { data, ready, err, refresh } = useSystemMetrics(POLL_MS);
+export function MonitorDashboard({
+  data,
+  ready,
+  err,
+  refresh,
+}: {
+  data: MetricsPayload;
+  ready: boolean;
+  err: string | null;
+  refresh: () => void | Promise<void>;
+}) {
+  const [killingKey, setKillingKey] = useState<string | null>(null);
+  const [killMsg, setKillMsg] = useState<{ text: string; ok: boolean } | null>(null);
+  const [, startTransition] = useTransition();
 
   const storageHeader = data.storage.some(
     (s) => s.smartTone === "warn" || s.smartTone === "crit",
@@ -95,14 +277,37 @@ export function MonitorDashboard() {
   const storageTone =
     storageHeader === "注意" ? "text-[#FFB020]" : storageHeader === "正常" ? "text-[#2EE6A6]" : "text-white/40";
 
-  const processes =
-    data.processes.length > 0
-      ? data.processes.slice(0, 3)
-      : [
-          { name: "—", percent: 0 },
-          { name: "—", percent: 0 },
-          { name: "—", percent: 0 },
-        ];
+  const cpuRows = padProcRows(data.processesCpu, 5);
+  const memRows = padProcRows(data.processesMem, 5);
+
+  const handleKill = (row: MetricsPayload["processesCpu"][number]) => {
+    if (!row.imageName || row.name === "—") return;
+    const key = `${row.imageName}:${row.pids.join(",")}`;
+    setKillingKey(key);
+    setKillMsg(null);
+    startTransition(() => {
+      void (async () => {
+        try {
+          const res = await endProcessGroup({
+            imageName: row.imageName,
+            pids: row.pids,
+          });
+          setKillMsg({ text: res.message, ok: res.ok });
+          if (res.ok) {
+            window.setTimeout(() => setKillMsg(null), 2500);
+          }
+          await refresh();
+        } catch (e) {
+          setKillMsg({
+            text: e instanceof Error ? e.message : "结束失败",
+            ok: false,
+          });
+        } finally {
+          setKillingKey(null);
+        }
+      })();
+    });
+  };
 
   return (
     <div className="monitor-shell">
@@ -134,6 +339,14 @@ export function MonitorDashboard() {
                 {err ? (
                   <span className="shrink-0 text-[#FF4D6D]" style={{ fontSize: "var(--fs-xs)" }}>
                     错误
+                  </span>
+                ) : null}
+                {killMsg ? (
+                  <span
+                    className={`shrink-0 truncate ${killMsg.ok ? "text-[#2EE6A6]" : "text-[#FF4D6D]"}`}
+                    style={{ fontSize: "var(--fs-xs)" }}
+                  >
+                    {killMsg.text}
                   </span>
                 ) : null}
               </div>
@@ -182,18 +395,14 @@ export function MonitorDashboard() {
           </div>
         </header>
 
-        {/* Row 2 — Hero: health + CPU / Memory / GPU / MiniTrend */}
+        {/* Row 2 — Hero: PowerSession + CPU / Memory / GPU / MiniTrend */}
         <section className="grid min-h-0 min-w-0 grid-cols-1 gap-[var(--gap)] overflow-hidden md:grid-cols-[minmax(0,1.05fr)_minmax(0,1.65fr)]">
-          <Glass className="corner-brackets card-pad relative flex min-h-0 min-w-0 flex-col items-center justify-center overflow-hidden">
-            <DualRing
-              outer={data.health.score}
-              inner={Math.max(0, 100 - data.health.load)}
-              center={ready ? String(data.health.score) : "—"}
-              sub={`负载 ${data.health.load}% · ${
-                data.health.temp != null ? `${data.health.temp}°C` : "健康"
-              }`}
-            />
-          </Glass>
+          <PowerSessionCard
+            cpuRows={cpuRows}
+            memRows={memRows}
+            onKill={handleKill}
+            killingKey={killingKey}
+          />
 
           <div className="grid min-h-0 min-w-0 grid-cols-2 grid-rows-2 gap-[var(--gap)] overflow-hidden">
             {/* CPU */}
@@ -251,48 +460,63 @@ export function MonitorDashboard() {
               />
             </Glass>
 
-            {/* GPU */}
-            <Glass className="corner-brackets card-pad flex min-h-0 min-w-0 flex-col justify-between overflow-hidden">
-              <div className="flex min-h-0 items-start justify-between gap-2 overflow-hidden">
-                <div className="min-w-0 overflow-hidden">
-                  <div className="tracking-[0.14em] text-white/45" style={{ fontSize: "var(--fs-xs)" }}>
-                    GPU
-                  </div>
-                  <div className="glow-num metric-num mt-[0.2em]">
-                    {ready ? `${data.gpu.percent}%` : "—"}
-                  </div>
-                  <div className="mt-[0.3em] truncate text-white/55" style={{ fontSize: "var(--fs-sm)" }}>
-                    显存{" "}
-                    {data.gpu.vramUsedGb != null && data.gpu.vramTotalGb != null
-                      ? `${data.gpu.vramUsedGb} / ${data.gpu.vramTotalGb} GB`
-                      : "暂无"}
-                    {data.gpu.percent != null ? ` · 占用 ${data.gpu.percent}%` : ""}
-                  </div>
-                  <div className="mt-[0.35em]">
-                    <KpiRow peak={data.gpu.peak} avg={data.gpu.avg} current={data.gpu.percent} />
-                  </div>
+            {/* GPU — Meta left + VramBar / HalfRing / Spark right (Figma) */}
+            <Glass className="corner-brackets card-pad flex min-h-0 min-w-0 items-center gap-3 overflow-hidden">
+              <div className="min-w-0 flex-1 overflow-hidden">
+                <div
+                  className="tracking-[0.14em] text-[#5C4A6E]"
+                  style={{ fontSize: "var(--fs-xs)" }}
+                >
+                  GPU
                 </div>
-                <div className="hidden shrink-0 flex-col items-end gap-1 sm:flex">
-                  {data.gpu.vramTotalGb != null && data.gpu.vramUsedGb != null ? (
-                    <Bar
-                      value={(data.gpu.vramUsedGb / data.gpu.vramTotalGb) * 100}
-                      color="#FF2BD6"
-                      className="!h-1 w-16"
-                    />
-                  ) : null}
-                  <ArcGauge
-                    value={data.gpu.percent}
-                    color="#FF2BD6"
-                    size={64}
-                    label={data.gpu.temp != null ? `${data.gpu.temp}°` : undefined}
-                  />
+                <div className="glow-num metric-num mt-[0.2em]">
+                  {ready ? `${data.gpu.percent}%` : "—"}
+                </div>
+                <div
+                  className="mt-[0.3em] truncate text-[#5C4A5C]"
+                  style={{ fontSize: "var(--fs-sm)" }}
+                >
+                  显存{" "}
+                  {data.gpu.vramUsedGb != null && data.gpu.vramTotalGb != null
+                    ? `${data.gpu.vramUsedGb} / ${data.gpu.vramTotalGb} GB`
+                    : "暂无"}
+                  {data.gpu.percent != null ? `  ·  占用 ${data.gpu.percent}%` : ""}
+                </div>
+                <div className="mt-[0.35em]">
+                  <KpiRow peak={data.gpu.peak} avg={data.gpu.avg} current={data.gpu.percent} />
                 </div>
               </div>
-              <Sparkline
-                data={data.gpu.history}
-                color="#A855FF"
-                className="mt-1 h-[clamp(0.9rem,1.8vh,1.25rem)] w-full"
-              />
+              <div className="flex w-[clamp(5.5rem,28%,9rem)] shrink-0 flex-col items-center justify-center gap-[clamp(0.35rem,0.9vh,0.65rem)] overflow-hidden">
+                {(() => {
+                  const vramPct =
+                    data.gpu.vramTotalGb != null &&
+                    data.gpu.vramTotalGb > 0 &&
+                    data.gpu.vramUsedGb != null
+                      ? Math.round((data.gpu.vramUsedGb / data.gpu.vramTotalGb) * 100)
+                      : null;
+                  return (
+                    <>
+                      <Bar
+                        value={vramPct ?? 0}
+                        color="#A855FF"
+                        fill="linear-gradient(90deg, #FFB020 0%, #A855FF 100%)"
+                        className="!h-1 w-[85%]"
+                      />
+                      <ArcGauge
+                        value={vramPct ?? data.gpu.percent}
+                        color="#FF2BD6"
+                        size={72}
+                        label={vramPct != null ? `${vramPct}%` : undefined}
+                      />
+                      <Sparkline
+                        data={data.gpu.history}
+                        color="#A855FF"
+                        className="h-[clamp(1rem,2.2vh,1.5rem)] w-full"
+                      />
+                    </>
+                  );
+                })()}
+              </div>
             </Glass>
 
             {/* MiniTrend */}
@@ -370,8 +594,10 @@ export function MonitorDashboard() {
           </div>
         </Glass>
 
-        {/* Row 4 — QuickLaunch / PowerSession / Storage */}
+        {/* Row 4 — 本机描述 / 快捷启动 / 存储 */}
         <section className="grid min-h-0 min-w-0 grid-cols-3 gap-[var(--gap)] overflow-hidden">
+          <HostDescCard host={data.host} />
+
           <Glass className="card-pad flex min-h-0 min-w-0 flex-col overflow-hidden">
             <h2
               className="mb-[clamp(0.3rem,0.8vh,0.5rem)] shrink-0 truncate text-[#5C4A6E]"
@@ -379,65 +605,13 @@ export function MonitorDashboard() {
             >
               快捷启动
             </h2>
-            <div className="grid min-h-0 flex-1 grid-cols-4 grid-rows-2 gap-[clamp(0.3rem,0.8vh,0.55rem)] overflow-hidden">
+            <div className="quick-launch-grid">
               {APPS.map((app) => (
                 <button key={app.label} type="button" className="app-tile">
                   <span className="app-icon" style={{ background: app.color }} />
-                  <span className="truncate">{app.label}</span>
+                  <span className="truncate max-w-full">{app.label}</span>
                 </button>
               ))}
-            </div>
-          </Glass>
-
-          <Glass className="card-pad flex min-h-0 min-w-0 flex-col overflow-hidden">
-            <h2
-              className="mb-[clamp(0.3rem,0.7vh,0.45rem)] shrink-0 truncate text-[#5C4A6E]"
-              style={{ fontSize: "var(--fs-sm)" }}
-            >
-              电源与会话
-            </h2>
-            <div className="mb-[clamp(0.3rem,0.7vh,0.45rem)] flex shrink-0 gap-1.5 overflow-hidden">
-              <button type="button" className="power-btn">
-                睡眠
-              </button>
-              <button type="button" className="power-btn">
-                锁定
-              </button>
-              <button type="button" className="power-btn power-btn--warn">
-                重启
-                <small>需确认</small>
-              </button>
-              <button type="button" className="power-btn power-btn--crit">
-                关机
-                <small>需确认</small>
-              </button>
-            </div>
-            <div className="mb-[0.3em] shrink-0 text-[#5C4A6E]" style={{ fontSize: "var(--fs-xs)" }}>
-              结束进程
-            </div>
-            <div className="grid min-h-0 flex-1 grid-rows-[repeat(3,minmax(0,1fr))_auto] gap-[clamp(0.2rem,0.55vh,0.35rem)] overflow-hidden">
-              {processes.map((p, i) => (
-                <div key={`${p.name}-${i}`} className="proc-row">
-                  <div className="flex min-w-0 items-baseline gap-2 overflow-hidden">
-                    <span className="truncate text-white/85" style={{ fontSize: "var(--fs-sm)" }}>
-                      {p.name}
-                    </span>
-                    <span className="shrink-0 text-white/40" style={{ fontSize: "var(--fs-xs)" }}>
-                      {p.percent}%
-                    </span>
-                  </div>
-                  <button type="button" className="kill-btn">
-                    结束
-                  </button>
-                </div>
-              ))}
-              <button
-                type="button"
-                className="power-btn !flex-none w-full"
-                style={{ fontSize: "var(--fs-sm)" }}
-              >
-                全部进程
-              </button>
             </div>
           </Glass>
 
@@ -450,37 +624,68 @@ export function MonitorDashboard() {
                 {storageHeader}
               </span>
             </div>
-            <div className="grid min-h-0 flex-1 grid-rows-[1fr_1fr_auto] gap-[clamp(0.55rem,1.2vh,0.9rem)] overflow-hidden">
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
               {data.storage.length === 0 ? (
                 <div className="text-white/40" style={{ fontSize: "var(--fs-sm)" }}>
                   暂无磁盘信息
                 </div>
               ) : (
-                data.storage.slice(0, 2).map((vol) => {
-                  const color = vol.accent === "orange" ? "#FFB020" : "#A855FF";
-                  const usedLabel =
-                    vol.unit === "TB"
-                      ? `${(vol.usedGb / 1024).toFixed(1)} / ${(vol.totalGb / 1024).toFixed(1)} TB`
-                      : `${vol.usedGb >= 100 ? Math.round(vol.usedGb) : vol.usedGb.toFixed(0)} / ${
-                          vol.totalGb >= 100 ? Math.round(vol.totalGb) : vol.totalGb.toFixed(0)
-                        } GB`;
-                  return (
-                    <div key={vol.id} className="flex min-h-0 flex-col justify-center gap-1.5 overflow-hidden">
-                      <div className="flex items-center justify-between gap-2 overflow-hidden">
-                        <span className="font-medium text-white/85" style={{ fontSize: "var(--fs-sm)" }}>
-                          {vol.letter}:
-                        </span>
-                        <span className="truncate text-white/45" style={{ fontSize: "var(--fs-xs)" }}>
-                          {usedLabel}
-                        </span>
+                <div
+                  className="grid min-h-0 flex-1 overflow-hidden"
+                  style={{
+                    gridTemplateRows: `repeat(${data.storage.length}, minmax(0, 1fr))`,
+                    gap: data.storage.length >= 5
+                      ? "clamp(0.2rem, 0.5vh, 0.35rem)"
+                      : data.storage.length >= 3
+                        ? "clamp(0.35rem, 0.8vh, 0.55rem)"
+                        : "clamp(0.55rem, 1.2vh, 0.9rem)",
+                  }}
+                >
+                  {data.storage.map((vol) => {
+                    const color = vol.accent === "orange" ? "#FFB020" : "#A855FF";
+                    const title = vol.label ? `${vol.label} (${vol.letter}:)` : `${vol.letter}:`;
+                    const usedLabel =
+                      vol.unit === "TB"
+                        ? `${(vol.usedGb / 1024).toFixed(1)} / ${(vol.totalGb / 1024).toFixed(1)} TB`
+                        : `${vol.usedGb >= 100 ? Math.round(vol.usedGb) : vol.usedGb.toFixed(0)} / ${
+                            vol.totalGb >= 100 ? Math.round(vol.totalGb) : vol.totalGb.toFixed(0)
+                          } GB`;
+                    const dense = data.storage.length >= 4;
+                    return (
+                      <div
+                        key={vol.id}
+                        className="flex min-h-0 flex-col justify-center overflow-hidden"
+                        style={{ gap: dense ? "0.2rem" : "0.35rem" }}
+                      >
+                        <div className="flex items-center justify-between gap-2 overflow-hidden">
+                          <span
+                            className="min-w-0 truncate font-medium text-[#F2E5F5]"
+                            style={{ fontSize: dense ? "var(--fs-sm)" : "var(--fs-md)" }}
+                          >
+                            {title}
+                          </span>
+                          <span
+                            className="shrink-0 truncate text-[#B2A6BF]"
+                            style={{ fontSize: "var(--fs-xs)" }}
+                          >
+                            {usedLabel}
+                          </span>
+                        </div>
+                        <Bar
+                          value={vol.percent}
+                          color={color}
+                          className={dense ? "h-1!" : "h-[5px]!"}
+                        />
                       </div>
-                      <Bar value={vol.percent} color={color} />
-                    </div>
-                  );
-                })
+                    );
+                  })}
+                </div>
               )}
-              <div className="shrink-0 truncate text-white/45" style={{ fontSize: "var(--fs-xs)" }}>
-                读 {fmt(data.diskIO.readMBps, 0)} MB/s · 写 {fmt(data.diskIO.writeMBps, 0)} MB/s
+              <div
+                className="mt-[clamp(0.35rem,0.8vh,0.55rem)] shrink-0 truncate text-[#B2A6BF]"
+                style={{ fontSize: "var(--fs-xs)" }}
+              >
+                读 {fmt(data.diskIO.readMBps, 0)} MB/s  ·  写 {fmt(data.diskIO.writeMBps, 0)} MB/s
               </div>
             </div>
           </Glass>

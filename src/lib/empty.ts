@@ -79,6 +79,7 @@ export function emptyMetrics(): MetricsPayload {
       historyWrite: [],
     },
     storage: [],
-    processes: [],
+    processesCpu: [],
+    processesMem: [],
   };
 }

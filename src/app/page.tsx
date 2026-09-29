@@ -1,5 +1,5 @@
-import { MonitorDashboard } from "@/components/MonitorDashboard";
+import { HomeClient } from "@/components/HomeClient";
 
 export default function Home() {
-  return <MonitorDashboard />;
+  return <HomeClient />;
 }
