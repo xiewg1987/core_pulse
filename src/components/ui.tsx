@@ -83,9 +83,9 @@ export function Bar({
   const pct = Math.max(0, Math.min(100, (value / max) * 100));
   const bg = fill || color;
   return (
-    <div className={`h-[5px] w-full overflow-hidden rounded-none bg-white/10 ${className}`}>
+    <div className={`h-2 w-full overflow-hidden rounded bg-white/8 ${className}`}>
       <div
-        className="h-full rounded-none transition-[width] duration-500"
+        className="h-full rounded transition-[width] duration-500"
         style={{
           width: `${pct}%`,
           background: bg,
@@ -113,25 +113,35 @@ export function Sparkline({
   const max = Math.max(...vals, 1);
   const min = Math.min(...vals, 0);
   const span = Math.max(max - min, 1);
-  const pts = vals
-    .map((v, i) => {
-      const x = (i / Math.max(vals.length - 1, 1)) * w;
-      const y = h - ((v - min) / span) * (h - 4) - 2;
-      return `${x.toFixed(1)},${y.toFixed(1)}`;
-    })
-    .join(" ");
+  const coords = vals.map((v, i) => {
+    const x = (i / Math.max(vals.length - 1, 1)) * w;
+    const y = h - ((v - min) / span) * (h - 4) - 2;
+    return { x, y };
+  });
+  const pts = coords.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ");
+  const area = [
+    `0,${h}`,
+    ...coords.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`),
+    `${w},${h}`,
+  ].join(" ");
 
   return (
     <svg viewBox={`0 0 ${w} ${h}`} className={`overflow-visible ${className}`} preserveAspectRatio="none">
+      <defs>
+        <linearGradient id={`spark-fill-${color.replace("#", "")}`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={color} stopOpacity="0.4" />
+          <stop offset="100%" stopColor={color} stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <polygon fill={`url(#spark-fill-${color.replace("#", "")})`} points={area} />
       <polyline
         fill="none"
         stroke={color}
-        strokeWidth="1.8"
+        strokeWidth="1.6"
         strokeLinecap="round"
         strokeLinejoin="round"
         points={pts}
         opacity={0.95}
-        style={{ filter: `drop-shadow(0 0 4px ${color}88)` }}
       />
     </svg>
   );
@@ -197,7 +207,7 @@ export function ArcGauge({
         <path
           d={`M ${stroke / 2} ${size / 2} A ${r} ${r} 0 0 1 ${size - stroke / 2} ${size / 2}`}
           fill="none"
-          stroke="rgba(255,255,255,0.08)"
+          stroke="#4C2A6E"
           strokeWidth={stroke}
           strokeLinecap="round"
         />

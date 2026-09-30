@@ -244,6 +244,56 @@ function TrendRow({
   );
 }
 
+/** Figma MetricCard: Meta left + semicircle gauge / spark Visual right. */
+function MetricCard({
+  kind,
+  percent,
+  subtitle,
+  peak,
+  avg,
+  color,
+  history,
+  gaugeValue,
+}: {
+  kind: string;
+  percent: number;
+  subtitle: string;
+  peak: number;
+  avg: number;
+  color: string;
+  history: number[];
+  gaugeValue?: number;
+}) {
+  return (
+    <Glass className="card-pad flex min-h-0 min-w-0 items-center gap-3 overflow-hidden">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col justify-center gap-1.5 overflow-hidden">
+        <div
+          className="tracking-[0.1em] text-[#5C4A6E]"
+          style={{ fontSize: "var(--fs-xs)" }}
+        >
+          {kind}
+        </div>
+        <div className="glow-num metric-num">{percent}%</div>
+        <div
+          className="truncate font-mono text-[var(--text-secondary)]"
+          style={{ fontSize: "var(--fs-sm)" }}
+        >
+          {subtitle}
+        </div>
+        <KpiRow peak={peak} avg={avg} current={percent} />
+      </div>
+      <div className="flex w-[clamp(5.5rem,38%,9rem)] shrink-0 flex-col items-center justify-center gap-[clamp(0.55rem,1.4vh,1rem)] overflow-hidden">
+        <ArcGauge value={gaugeValue ?? percent} color={color} size={100} stroke={10} />
+        <Sparkline
+          data={history}
+          color={color}
+          className="h-[clamp(0.9rem,2vh,1.25rem)] w-full"
+        />
+      </div>
+    </Glass>
+  );
+}
+
 export function MonitorDashboard({
   data,
   ready,
@@ -260,8 +310,6 @@ export function MonitorDashboard({
   const [killingKey, setKillingKey] = useState<string | null>(null);
   const [killMsg, setKillMsg] = useState<{ text: string; ok: boolean } | null>(null);
   const [, startTransition] = useTransition();
-
-  const storageHeader = data.storage.length ? `${data.storage.length} 盘` : "暂无";
 
   const cpuRows = padProcRows(data.processesCpu, 5);
   const memRows = padProcRows(data.processesMem, 5);
@@ -386,122 +434,49 @@ export function MonitorDashboard({
           />
 
           <div className="grid min-h-0 min-w-0 grid-cols-2 grid-rows-2 gap-[var(--gap)] overflow-hidden">
-            {/* CPU */}
-            <Glass className="corner-brackets card-pad flex min-h-0 min-w-0 flex-col justify-between overflow-hidden">
-              <div className="min-w-0 overflow-hidden">
-                <div className="tracking-[0.14em] text-white/45" style={{ fontSize: "var(--fs-xs)" }}>
-                  CPU
-                </div>
-                <div className="glow-num metric-num mt-[0.2em]">{data.cpu.percent}%</div>
-                <div className="mt-[0.4em]">
-                  <KpiRow peak={data.cpu.peak} avg={data.cpu.avg} current={data.cpu.percent} />
-                </div>
-              </div>
-              <div className="mt-1 min-h-0 overflow-hidden">
-                <Sparkline
-                  data={data.cpu.history}
-                  color="#FF2BD6"
-                  className="h-[clamp(0.9rem,1.8vh,1.25rem)] w-full"
-                />
-                <div className="mt-[0.25em] truncate text-white/50" style={{ fontSize: "var(--fs-xs)" }}>
-                  {data.cpu.speedGhz != null
-                    ? `${data.cpu.speedGhz.toFixed(1)} GHz · 当前频率`
-                    : "频率暂无"}
-                </div>
-              </div>
-            </Glass>
-
-            {/* Memory */}
-            <Glass className="corner-brackets card-pad flex min-h-0 min-w-0 flex-col justify-between overflow-hidden">
-              <div className="flex min-h-0 items-start justify-between gap-2 overflow-hidden">
-                <div className="min-w-0 overflow-hidden">
-                  <div className="tracking-[0.14em] text-white/45" style={{ fontSize: "var(--fs-xs)" }}>
-                    MEMORY
-                  </div>
-                  <div className="glow-num metric-num mt-[0.2em]">{data.memory.percent}%</div>
-                  <div className="mt-[0.3em] truncate text-white/55" style={{ fontSize: "var(--fs-sm)" }}>
-                    {data.memory.usedGb} / {data.memory.totalGb} GB
-                  </div>
-                  <div className="mt-[0.35em]">
-                    <KpiRow
-                      peak={data.memory.peak}
-                      avg={data.memory.avg}
-                      current={data.memory.percent}
-                    />
-                  </div>
-                </div>
-                <div className="hidden shrink-0 sm:block">
-                  <ArcGauge value={data.memory.percent} color="#A855FF" size={64} />
-                </div>
-              </div>
-              <Sparkline
-                data={data.memory.history}
-                color="#A855FF"
-                className="mt-1 h-[clamp(0.9rem,1.8vh,1.25rem)] w-full"
-              />
-            </Glass>
-
-            {/* GPU — Meta left + VramBar / HalfRing / Spark right (Figma) */}
-            <Glass className="corner-brackets card-pad flex min-h-0 min-w-0 items-center gap-3 overflow-hidden">
-              <div className="min-w-0 flex-1 overflow-hidden">
-                <div
-                  className="tracking-[0.14em] text-[#5C4A6E]"
-                  style={{ fontSize: "var(--fs-xs)" }}
-                >
-                  GPU
-                </div>
-                <div className="glow-num metric-num mt-[0.2em]">
-                  {ready ? `${data.gpu.percent}%` : "—"}
-                </div>
-                <div
-                  className="mt-[0.3em] truncate text-[#5C4A5C]"
-                  style={{ fontSize: "var(--fs-sm)" }}
-                >
-                  显存{" "}
-                  {data.gpu.vramUsedGb != null && data.gpu.vramTotalGb != null
-                    ? `${data.gpu.vramUsedGb} / ${data.gpu.vramTotalGb} GB`
-                    : "暂无"}
-                  {data.gpu.percent != null ? `  ·  占用 ${data.gpu.percent}%` : ""}
-                </div>
-                <div className="mt-[0.35em]">
-                  <KpiRow peak={data.gpu.peak} avg={data.gpu.avg} current={data.gpu.percent} />
-                </div>
-              </div>
-              <div className="flex w-[clamp(5.5rem,28%,9rem)] shrink-0 flex-col items-center justify-center gap-[clamp(0.35rem,0.9vh,0.65rem)] overflow-hidden">
-                {(() => {
-                  const vramPct =
-                    data.gpu.vramTotalGb != null &&
-                    data.gpu.vramTotalGb > 0 &&
-                    data.gpu.vramUsedGb != null
-                      ? Math.round((data.gpu.vramUsedGb / data.gpu.vramTotalGb) * 100)
-                      : null;
-                  return (
-                    <>
-                      <Bar
-                        value={vramPct ?? 0}
-                        color="#A855FF"
-                        fill="linear-gradient(90deg, #FFB020 0%, #A855FF 100%)"
-                        className="!h-1 w-[85%]"
-                      />
-                      <ArcGauge
-                        value={vramPct ?? data.gpu.percent}
-                        color="#FF2BD6"
-                        size={72}
-                        label={vramPct != null ? `${vramPct}%` : undefined}
-                      />
-                      <Sparkline
-                        data={data.gpu.history}
-                        color="#A855FF"
-                        className="h-[clamp(1rem,2.2vh,1.5rem)] w-full"
-                      />
-                    </>
-                  );
-                })()}
-              </div>
-            </Glass>
-
-            {/* MiniTrend */}
-            <Glass className="corner-brackets card-pad flex min-h-0 min-w-0 flex-col overflow-hidden">
+            <MetricCard
+              kind="CPU"
+              percent={data.cpu.percent}
+              subtitle={
+                data.cpu.speedGhz != null
+                  ? `${data.cpu.speedGhz.toFixed(1)} GHz`
+                  : "频率暂无"
+              }
+              peak={data.cpu.peak}
+              avg={data.cpu.avg}
+              color="#FF2BD6"
+              history={data.cpu.history}
+            />
+            <MetricCard
+              kind="MEMORY"
+              percent={data.memory.percent}
+              subtitle={`${data.memory.usedGb} / ${data.memory.totalGb} GB`}
+              peak={data.memory.peak}
+              avg={data.memory.avg}
+              color="#A855FF"
+              history={data.memory.history}
+            />
+            <MetricCard
+              kind="GPU"
+              percent={data.gpu.percent}
+              subtitle={
+                data.gpu.vramUsedGb != null && data.gpu.vramTotalGb != null
+                  ? `显存 ${data.gpu.vramUsedGb} / ${data.gpu.vramTotalGb} GB`
+                  : "显存暂无"
+              }
+              peak={data.gpu.peak}
+              avg={data.gpu.avg}
+              color="#FF2BD6"
+              history={data.gpu.history}
+              gaugeValue={
+                data.gpu.vramTotalGb != null &&
+                data.gpu.vramTotalGb > 0 &&
+                data.gpu.vramUsedGb != null
+                  ? Math.round((data.gpu.vramUsedGb / data.gpu.vramTotalGb) * 100)
+                  : data.gpu.percent
+              }
+            />
+            <Glass className="card-pad flex min-h-0 min-w-0 flex-col overflow-hidden">
               <div
                 className="mb-[0.35em] shrink-0 tracking-[0.06em] text-white/45"
                 style={{ fontSize: "var(--fs-xs)" }}
@@ -532,20 +507,21 @@ export function MonitorDashboard({
           </div>
         </section>
 
-        {/* Row 3 — NETWORK */}
-        <Glass className="corner-brackets card-pad flex min-h-0 min-w-0 items-center gap-[clamp(0.5rem,1.2vw,1rem)] overflow-hidden">
+        {/* Row 3 — NETWORK (no HUD corner brackets) */}
+        <Glass className="card-pad flex min-h-0 min-w-0 items-center gap-[clamp(0.5rem,1.2vw,1rem)] overflow-hidden">
           <div className="w-[clamp(5.5rem,12vw,9rem)] shrink-0 overflow-hidden">
-            <div className="tracking-[0.14em] text-white/45" style={{ fontSize: "var(--fs-xs)" }}>
+            <div className="tracking-[0.14em] text-[#5C4A6E]" style={{ fontSize: "var(--fs-xs)" }}>
               NETWORK
             </div>
-            <div className="mt-[0.15em] truncate font-medium text-white/80" style={{ fontSize: "var(--fs-md)" }}>
+            <div className="mt-[0.15em] truncate font-semibold text-[#F8F0FF]" style={{ fontSize: "var(--fs-md)" }}>
               实时流量
             </div>
             <span
-              className="mt-[0.35em] inline-flex items-center gap-1 rounded-none border border-[rgba(46,230,166,0.4)] bg-[var(--chip)] px-2 text-[#2EE6A6]"
+              className="mt-[0.35em] inline-flex items-center gap-1.5 rounded-none border border-white/12 bg-[rgba(22,11,36,0.55)] px-2 text-[#2EE6A6]"
               style={{ fontSize: "var(--fs-xs)", height: "clamp(1.1rem,2.4vh,1.4rem)" }}
             >
-              <span className="live-dot">●</span> LIVE
+              <span className="live-dot inline-block h-1.5 w-1.5 rounded-full bg-[#2EE6A6] shadow-[0_0_4px_#2EE6A68C]" />
+              LIVE
             </span>
           </div>
           <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
@@ -567,7 +543,7 @@ export function MonitorDashboard({
             </div>
             <div
               className="mt-[0.25em] truncate text-[var(--text-secondary)]"
-              style={{ fontSize: "var(--fs-xs)" }}
+              style={{ fontSize: "var(--fs-sm)" }}
             >
               ↑ {fmt(data.network.upMbps, 2)} Mbps
               {data.network.latencyMs != null ? ` · 延迟 ${data.network.latencyMs} ms` : ""}
@@ -582,79 +558,75 @@ export function MonitorDashboard({
           <QuickLaunchCard />
 
           <Glass className="card-pad flex min-h-0 min-w-0 flex-col overflow-hidden">
-            <div className="mb-[clamp(0.35rem,0.9vh,0.55rem)] flex shrink-0 items-center justify-between gap-2 overflow-hidden">
-              <h2 className="truncate text-[#5C4A6E]" style={{ fontSize: "var(--fs-sm)" }}>
-                存储
-              </h2>
-              <span className="shrink-0 text-white/40" style={{ fontSize: "var(--fs-sm)" }}>
-                {storageHeader}
-              </span>
-            </div>
+            <h2
+              className="mb-[clamp(0.35rem,0.9vh,0.55rem)] shrink-0 truncate text-[#5C4A6E]"
+              style={{ fontSize: "var(--fs-sm)" }}
+            >
+              存储
+            </h2>
             <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
               {data.storage.length === 0 ? (
                 <div className="text-white/40" style={{ fontSize: "var(--fs-sm)" }}>
                   暂无磁盘信息
                 </div>
               ) : (
-                <div
-                  className="grid min-h-0 flex-1 overflow-hidden"
-                  style={{
-                    gridTemplateRows: `repeat(${data.storage.length}, minmax(0, 1fr))`,
-                    gap: data.storage.length >= 5
-                      ? "clamp(0.2rem, 0.5vh, 0.35rem)"
-                      : data.storage.length >= 3
-                        ? "clamp(0.35rem, 0.8vh, 0.55rem)"
-                        : "clamp(0.55rem, 1.2vh, 0.9rem)",
-                  }}
-                >
-                  {data.storage.map((vol) => {
-                    const color = vol.accent === "orange" ? "#FFB020" : "#A855FF";
-                    const title = vol.label ? `${vol.label} (${vol.letter}:)` : `${vol.letter}:`;
-                    const usedLabel =
-                      vol.unit === "TB"
-                        ? `${(vol.usedGb / 1024).toFixed(1)} / ${(vol.totalGb / 1024).toFixed(1)} TB`
-                        : `${vol.usedGb >= 100 ? Math.round(vol.usedGb) : vol.usedGb.toFixed(0)} / ${
-                            vol.totalGb >= 100 ? Math.round(vol.totalGb) : vol.totalGb.toFixed(0)
-                          } GB`;
-                    const dense = data.storage.length >= 4;
-                    const ioLabel = `读 ${fmt(vol.readMBps, 0)} MB/s  ·  写 ${fmt(vol.writeMBps, 0)} MB/s`;
-                    return (
-                      <div
-                        key={vol.id}
-                        className="flex min-h-0 flex-col justify-center overflow-hidden"
-                        style={{ gap: dense ? "0.2rem" : "0.35rem" }}
-                      >
-                        <div className="flex items-center justify-between gap-2 overflow-hidden">
-                          <div className="flex min-w-0 items-baseline gap-2 overflow-hidden">
+                <>
+                  <div
+                    className="flex min-h-0 flex-col overflow-hidden"
+                    style={{
+                      gap: data.storage.length >= 4
+                        ? "clamp(0.45rem, 1vh, 0.75rem)"
+                        : "1rem",
+                    }}
+                  >
+                    {data.storage.map((vol) => {
+                      const color = vol.accent === "orange" ? "#FFB020" : "#A855FF";
+                      const usedLabel =
+                        vol.unit === "TB"
+                          ? `${(vol.usedGb / 1024).toFixed(1)} / ${(vol.totalGb / 1024).toFixed(1)} TB`
+                          : `${vol.usedGb >= 100 ? Math.round(vol.usedGb) : vol.usedGb.toFixed(0)} / ${
+                              vol.totalGb >= 100 ? Math.round(vol.totalGb) : vol.totalGb.toFixed(0)
+                            } GB`;
+                      const ioLabel = `读 ${fmt(vol.readMBps, 0)} MB/s  ·  写 ${fmt(vol.writeMBps, 0)} MB/s`;
+                      return (
+                        <div
+                          key={vol.id}
+                          className="flex shrink-0 flex-col gap-2 overflow-hidden"
+                        >
+                          <div className="flex items-center justify-between gap-2 overflow-hidden">
+                            <div className="flex min-w-0 items-baseline gap-2 overflow-hidden">
+                              <span
+                                className="shrink-0 text-[#F2E5F5]"
+                                style={{ fontSize: "var(--fs-sm)" }}
+                              >
+                                {vol.letter}:
+                              </span>
+                              <span
+                                className="min-w-0 truncate text-[#B2A6BF]"
+                                style={{ fontSize: "var(--fs-xs)" }}
+                              >
+                                {ioLabel}
+                              </span>
+                            </div>
                             <span
-                              className="shrink-0 font-medium text-[#F2E5F5]"
-                              style={{ fontSize: dense ? "var(--fs-sm)" : "var(--fs-md)" }}
-                            >
-                              {title}
-                            </span>
-                            <span
-                              className="min-w-0 truncate text-[#B2A6BF]"
+                              className="shrink-0 truncate text-[#B2A6BF]"
                               style={{ fontSize: "var(--fs-xs)" }}
                             >
-                              {ioLabel}
+                              {usedLabel}
                             </span>
                           </div>
-                          <span
-                            className="shrink-0 truncate text-[#B2A6BF]"
-                            style={{ fontSize: "var(--fs-xs)" }}
-                          >
-                            {usedLabel}
-                          </span>
+                          <Bar value={vol.percent} color={color} className="h-2!" />
                         </div>
-                        <Bar
-                          value={vol.percent}
-                          color={color}
-                          className={dense ? "h-1!" : "h-[5px]!"}
-                        />
-                      </div>
-                    );
-                  })}
-                </div>
+                      );
+                    })}
+                  </div>
+                  <div
+                    className="mt-auto shrink-0 pt-2 font-mono text-[var(--text-secondary)]"
+                    style={{ fontSize: "var(--fs-xs)" }}
+                  >
+                    ↑ {fmt(data.diskIO.writeMBps, 0)} MB/s · ↓ {fmt(data.diskIO.readMBps, 0)} MB/s
+                  </div>
+                </>
               )}
             </div>
           </Glass>

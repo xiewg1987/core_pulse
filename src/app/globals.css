@@ -83,7 +83,7 @@ body {
   background: var(--panel);
   backdrop-filter: blur(clamp(16px, 3vh, 32px));
   -webkit-backdrop-filter: blur(clamp(16px, 3vh, 32px));
-  border-radius: 0;
+  border-radius: 16px;
   box-shadow: var(--shadow);
   border: 1px solid transparent;
   background-clip: padding-box;
@@ -172,11 +172,12 @@ body {
   padding: var(--pad);
   overflow: hidden;
   display: grid;
+  /* Figma 834: Top~66 · Hero~334 · FlowNet~90 · Bottom~286 */
   grid-template-rows:
-    minmax(0, 0.95fr)
-    minmax(0, 3.15fr)
-    minmax(0, 0.95fr)
-    minmax(0, 2.35fr);
+    minmax(0, 0.75fr)
+    minmax(0, 3.7fr)
+    minmax(0, 1fr)
+    minmax(0, 3.2fr);
   gap: var(--gap);
 }
 
@@ -227,19 +228,18 @@ body {
   align-items: center;
   height: clamp(1.1rem, 2.2vh, 1.35rem);
   padding: 0 0.45em;
-  border-radius: 0;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(22, 11, 36, 0.55);
-  color: var(--text-secondary);
+  border-radius: 6px;
+  border: none;
+  background: rgba(255, 43, 214, 0.14);
+  color: #ffbfe5;
   font-size: var(--fs-xs);
   font-weight: 500;
   white-space: nowrap;
 }
 
 .kpi-chip--now {
-  border-color: rgba(255, 43, 214, 0.45);
   background: rgba(255, 43, 214, 0.2);
-  color: #ff9ae8;
+  color: #ff2bd6;
 }
 
 .app-tile {
@@ -490,18 +490,26 @@ body {
 .kill-btn {
   flex-shrink: 0;
   height: auto;
-  border-radius: 0;
-  border: none;
-  background: transparent;
-  color: rgba(255, 43, 214, 0.75);
-  font-size: calc(var(--fs-xs) * 0.95);
-  padding: 0 0.15rem;
-  line-height: 1;
+  border-radius: 6px;
+  border: 1px solid #ff2bd6;
+  background: rgba(31, 20, 51, 0.55);
+  color: #ff2bd6;
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  padding: 2px 6px;
+  line-height: 12px;
   cursor: pointer;
+  transition:
+    background 0.15s ease,
+    box-shadow 0.15s ease;
 }
 
 .kill-btn:hover:not(:disabled) {
   color: #ff2bd6;
+  background: rgba(255, 43, 214, 0.18);
+  box-shadow: 0 0 10px rgba(255, 43, 214, 0.35);
 }
 
 .kill-btn:disabled {
