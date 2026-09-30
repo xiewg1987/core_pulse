@@ -36,9 +36,6 @@ export function LoadingScreen({ phase }: { phase: LoadingPhase }) {
 
   return (
     <div className="loading-shell" aria-busy={!ready} aria-live="polite">
-      <div className="loading-grid" aria-hidden />
-      <div className="loading-glow loading-glow--pink" aria-hidden />
-      <div className="loading-glow loading-glow--purple" aria-hidden />
       <div className="loading-breath" aria-hidden />
 
       <div className="loading-stage">

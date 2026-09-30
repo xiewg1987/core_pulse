@@ -300,12 +300,16 @@ export function MonitorDashboard({
   err,
   refresh,
   onOpenProcesses,
+  onOpenAppPicker,
+  shortcutRefreshToken = 0,
 }: {
   data: MetricsPayload;
   ready: boolean;
   err: string | null;
   refresh: () => void | Promise<void>;
   onOpenProcesses?: (originEl?: HTMLElement | null) => void;
+  onOpenAppPicker?: (originEl?: HTMLElement | null) => void;
+  shortcutRefreshToken?: number;
 }) {
   const [killingKey, setKillingKey] = useState<string | null>(null);
   const [killMsg, setKillMsg] = useState<{ text: string; ok: boolean } | null>(null);
@@ -555,7 +559,10 @@ export function MonitorDashboard({
         <section className="grid min-h-0 min-w-0 grid-cols-3 gap-[var(--gap)] overflow-hidden">
           <HostDescCard host={data.host} />
 
-          <QuickLaunchCard />
+          <QuickLaunchCard
+            onOpenPicker={onOpenAppPicker}
+            refreshToken={shortcutRefreshToken}
+          />
 
           <Glass className="card-pad flex min-h-0 min-w-0 flex-col overflow-hidden">
             <h2

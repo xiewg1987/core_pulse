@@ -2,6 +2,7 @@
 
 import {
   addShortcut as addShortcutLib,
+  addShortcuts as addShortcutsLib,
   launchShortcut as launchShortcutLib,
   listShortcuts as listShortcutsLib,
   removeShortcut as removeShortcutLib,
@@ -24,6 +25,16 @@ export async function addShortcut(input: {
   }
   return addShortcutLib(input);
 }
+
+export async function addShortcuts(
+  inputs: { label: string; target: string }[],
+): Promise<{ ok: boolean; message: string; items?: QuickShortcut[]; added: number }> {
+  if (mockAllowed()) {
+    return { ok: false, message: "模拟模式下无法添加快捷", added: 0 };
+  }
+  return addShortcutsLib(inputs);
+}
+
 
 export async function removeShortcut(id: string): Promise<{ ok: boolean; message: string }> {
   if (mockAllowed()) {

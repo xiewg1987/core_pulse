@@ -75,28 +75,56 @@ export async function addShortcut(input: {
   label: string;
   target: string;
 }): Promise<{ ok: boolean; message: string; item?: QuickShortcut }> {
-  const label = sanitizeLabel(input.label);
-  const target = sanitizeTarget(input.target);
-  if (!label) return { ok: false, message: "请填写名称" };
-  if (!target) return { ok: false, message: "路径需为绝对路径或 http(s) 链接" };
+  const res = await addShortcuts([{ label: input.label, target: input.target }]);
+  return {
+    ok: res.ok,
+    message: res.message,
+    item: res.items?.[0],
+  };
+}
+
+export async function addShortcuts(
+  inputs: { label: string; target: string }[],
+): Promise<{ ok: boolean; message: string; items?: QuickShortcut[]; added: number }> {
+  if (!inputs.length) return { ok: false, message: "未选择软件", added: 0 };
 
   const rows = await ensureStore();
-  if (rows.length >= MAX_SHORTCUTS) {
-    return { ok: false, message: `最多 ${MAX_SHORTCUTS} 个快捷` };
-  }
-  if (rows.some((r) => r.target.toLowerCase() === target.toLowerCase())) {
-    return { ok: false, message: "该目标已存在" };
+  const room = MAX_SHORTCUTS - rows.length;
+  if (room <= 0) {
+    return { ok: false, message: `已满 ${MAX_SHORTCUTS} 个`, added: 0 };
   }
 
-  const item: QuickShortcut = {
-    id: randomUUID(),
-    label,
-    target,
-    color: ACCENTS[rows.length % ACCENTS.length],
-  };
-  rows.push(item);
+  const existing = new Set(rows.map((r) => r.target.toLowerCase()));
+  const added: QuickShortcut[] = [];
+
+  for (const input of inputs) {
+    if (added.length >= room) break;
+    const label = sanitizeLabel(input.label);
+    const target = sanitizeTarget(input.target);
+    if (!label || !target) continue;
+    if (existing.has(target.toLowerCase())) continue;
+    const item: QuickShortcut = {
+      id: randomUUID(),
+      label,
+      target,
+      color: ACCENTS[(rows.length + added.length) % ACCENTS.length],
+    };
+    added.push(item);
+    existing.add(target.toLowerCase());
+  }
+
+  if (!added.length) {
+    return { ok: false, message: "没有可添加的项（可能已存在）", added: 0 };
+  }
+
+  rows.push(...added);
   await writeStore(rows);
-  return { ok: true, message: "已添加", item };
+  return {
+    ok: true,
+    message: `已添加 ${added.length} 项`,
+    items: added,
+    added: added.length,
+  };
 }
 
 export async function removeShortcut(id: string): Promise<{ ok: boolean; message: string }> {

@@ -3,7 +3,6 @@
 import { useEffect, useState, useTransition } from "react";
 import { Glass } from "@/components/ui";
 import {
-  addShortcut,
   launchShortcut,
   listShortcuts,
   removeShortcut,
@@ -11,12 +10,18 @@ import {
 } from "@/actions/shortcuts";
 import { MAX_SHORTCUTS } from "@/lib/shortcut-types";
 
-function QuickAddTile({ onClick, disabled }: { onClick: () => void; disabled?: boolean }) {
+function QuickAddTile({
+  onClick,
+  disabled,
+}: {
+  onClick: (el: HTMLElement) => void;
+  disabled?: boolean;
+}) {
   return (
     <button
       type="button"
       className="quick-add"
-      onClick={onClick}
+      onClick={(e) => onClick(e.currentTarget)}
       disabled={disabled}
       aria-label="添加快捷"
     >
@@ -55,11 +60,15 @@ function QuickItemTile({
   );
 }
 
-export function QuickLaunchCard() {
+export function QuickLaunchCard({
+  onOpenPicker,
+  refreshToken = 0,
+}: {
+  onOpenPicker?: (originEl?: HTMLElement | null) => void;
+  /** Bump after picker adds items to refresh the list */
+  refreshToken?: number;
+}) {
   const [items, setItems] = useState<QuickShortcut[]>([]);
-  const [open, setOpen] = useState(false);
-  const [label, setLabel] = useState("");
-  const [target, setTarget] = useState("");
   const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -81,27 +90,12 @@ export function QuickLaunchCard() {
 
   useEffect(() => {
     refresh();
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount once
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount / token
+  }, [refreshToken]);
 
   const flash = (text: string, ok: boolean) => {
     setMsg({ text, ok });
     window.setTimeout(() => setMsg(null), 2400);
-  };
-
-  const submitAdd = () => {
-    startTransition(() => {
-      void (async () => {
-        const res = await addShortcut({ label, target });
-        flash(res.message, res.ok);
-        if (res.ok) {
-          setOpen(false);
-          setLabel("");
-          setTarget("");
-          refresh();
-        }
-      })();
-    });
   };
 
   const canAdd = items.length < MAX_SHORTCUTS;
@@ -148,48 +142,13 @@ export function QuickLaunchCard() {
             }}
           />
         ))}
-        {canAdd ? <QuickAddTile onClick={() => setOpen(true)} disabled={pending} /> : null}
+        {canAdd ? (
+          <QuickAddTile
+            onClick={(el) => onOpenPicker?.(el)}
+            disabled={pending || !onOpenPicker}
+          />
+        ) : null}
       </div>
-
-      {open ? (
-        <div className="quick-add-modal" role="dialog" aria-modal="true" aria-label="添加快捷">
-          <div className="quick-add-sheet">
-            <h3 className="quick-add-title">添加快捷</h3>
-            <p className="quick-add-hint">路径相对于被监控的 Windows 本机（可用绝对路径或网址）</p>
-            <label className="quick-add-field">
-              <span>名称</span>
-              <input
-                value={label}
-                onChange={(e) => setLabel(e.target.value)}
-                placeholder="例如 终端"
-                maxLength={24}
-                autoFocus
-              />
-            </label>
-            <label className="quick-add-field">
-              <span>目标</span>
-              <input
-                value={target}
-                onChange={(e) => setTarget(e.target.value)}
-                placeholder="C:\…\app.exe 或 https://…"
-              />
-            </label>
-            <div className="quick-add-actions">
-              <button type="button" className="quick-add-cancel" onClick={() => setOpen(false)}>
-                取消
-              </button>
-              <button
-                type="button"
-                className="quick-add-submit"
-                disabled={pending || !label.trim() || !target.trim()}
-                onClick={submitAdd}
-              >
-                {pending ? "…" : "添加"}
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
     </Glass>
   );
 }

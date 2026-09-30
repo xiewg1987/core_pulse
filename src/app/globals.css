@@ -159,8 +159,7 @@ body {
   width: 100%;
   overflow: hidden;
   background:
-    radial-gradient(42vw 32vh at 12% -4%, rgba(168, 85, 255, 0.2), transparent 60%),
-    radial-gradient(38vw 36vh at 88% 72%, rgba(255, 43, 214, 0.1), transparent 55%),
+    url("/assets/bg-cyber.png") center / cover no-repeat,
     var(--bg);
 }
 
@@ -812,43 +811,11 @@ body {
   max-height: 100dvh;
   width: 100%;
   overflow: hidden;
-  background: var(--bg);
+  background:
+    url("/assets/bg-cyber.png") center / cover no-repeat,
+    var(--bg);
   display: grid;
   place-items: center;
-}
-
-.loading-grid {
-  position: absolute;
-  inset: 0;
-  background-image:
-    linear-gradient(rgba(168, 85, 255, 0.07) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(168, 85, 255, 0.07) 1px, transparent 1px);
-  background-size: 120px 120px;
-  mask-image: radial-gradient(ellipse 70% 65% at 50% 42%, #000 20%, transparent 75%);
-  pointer-events: none;
-}
-
-.loading-glow {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(120px);
-  pointer-events: none;
-}
-
-.loading-glow--pink {
-  width: min(42vw, 520px);
-  height: min(34vh, 280px);
-  left: 2%;
-  top: -8%;
-  background: rgba(255, 43, 214, 0.12);
-}
-
-.loading-glow--purple {
-  width: min(40vw, 480px);
-  height: min(38vh, 320px);
-  right: 0;
-  bottom: 4%;
-  background: rgba(168, 85, 255, 0.12);
 }
 
 .loading-breath {
@@ -1195,6 +1162,19 @@ body {
   pointer-events: auto;
 }
 
+.view-layer--overlay {
+  z-index: 2;
+  transform: scale(0.35) translate3d(-2%, 5%, 0);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.view-layer--overlay.is-shown {
+  transform: scale(1) translate3d(0, 0, 0);
+  opacity: 1;
+  pointer-events: auto;
+}
+
 @media (prefers-reduced-motion: reduce) {
   /* Shorten only — stripping transform made the switch look like a hard cut on
      Windows machines with「动画效果」off (prefers-reduced-motion: reduce). */
@@ -1202,3 +1182,458 @@ body {
     --view-ms: 220ms;
   }
 }
+
+/* —— App picker (Figma: iPad / My PC · 选择软件) —— */
+
+.picker-shell {
+  position: relative;
+  height: 100dvh;
+  max-height: 100dvh;
+  width: 100%;
+  overflow: hidden;
+  background:
+    url("/assets/bg-cyber.png") center / cover no-repeat,
+    var(--bg);
+}
+
+.picker-frame {
+  height: 100%;
+  width: 100%;
+  max-width: 1400px;
+  margin-inline: auto;
+  padding: clamp(1rem, 2.2vh, 1.5rem) clamp(1rem, 2vw, 1.5rem);
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  gap: 0.75rem;
+  overflow: hidden;
+}
+
+.picker-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  min-height: 3rem;
+  overflow: hidden;
+}
+
+.picker-left {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.picker-back {
+  flex-shrink: 0;
+  height: 1.75rem;
+  padding: 0 0.65rem;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 43, 214, 0.4);
+  background: rgba(22, 11, 36, 0.55);
+  color: #ff2bd6;
+  font-size: 0.6875rem;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.picker-back:hover {
+  border-color: rgba(255, 43, 214, 0.75);
+  background: rgba(40, 24, 64, 0.7);
+}
+
+.picker-titles {
+  min-width: 0;
+}
+
+.picker-title {
+  margin: 0;
+  color: #f8f0ff;
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.picker-sub {
+  margin: 0.15rem 0 0;
+  color: #5c4a6e;
+  font-size: 0.6875rem;
+}
+
+.picker-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.picker-msg {
+  max-width: 10rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.6875rem;
+}
+
+.picker-msg.is-ok {
+  color: #2ee6a6;
+}
+
+.picker-msg.is-err {
+  color: #ff4d6d;
+}
+
+.picker-btn-ghost,
+.picker-btn-primary {
+  height: 2rem;
+  padding: 0 0.875rem;
+  border-radius: 8px;
+  font-size: 0.75rem;
+  transition: border-color 0.15s ease, background 0.15s ease, opacity 0.15s ease;
+}
+
+.picker-btn-ghost {
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(22, 11, 36, 0.55);
+  color: #9b87b0;
+}
+
+.picker-btn-ghost:hover {
+  border-color: rgba(255, 255, 255, 0.3);
+  color: #f8f0ff;
+}
+
+.picker-btn-primary {
+  border: 1px solid rgba(255, 43, 214, 0.95);
+  background: rgba(255, 43, 214, 0.18);
+  color: #ff2bd6;
+}
+
+.picker-btn-primary:hover:not(:disabled) {
+  background: rgba(255, 43, 214, 0.28);
+}
+
+.picker-btn-primary.is-disabled,
+.picker-btn-primary:disabled {
+  border-color: rgba(255, 255, 255, 0.08);
+  background: rgba(22, 11, 36, 0.4);
+  color: #5c4a6e;
+  cursor: not-allowed;
+}
+
+.picker-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-height: 2.25rem;
+  overflow: hidden;
+}
+
+.picker-search {
+  flex: 1;
+  min-width: 0;
+}
+
+.picker-search input {
+  width: 100%;
+  height: 2.25rem;
+  padding: 0 0.875rem;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(22, 11, 36, 0.7);
+  color: #f8f0ff;
+  font-size: 0.75rem;
+  outline: none;
+}
+
+.picker-search input::placeholder {
+  color: #5c4a6e;
+}
+
+.picker-search input:focus {
+  border-color: rgba(255, 43, 214, 0.45);
+}
+
+.picker-segments {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  flex-shrink: 0;
+}
+
+.picker-seg {
+  height: 2rem;
+  padding: 0 0.75rem;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(22, 11, 36, 0.55);
+  color: #9b87b0;
+  font-size: 0.6875rem;
+  white-space: nowrap;
+}
+
+.picker-seg.is-active {
+  border-color: rgba(255, 43, 214, 0.9);
+  background: rgba(22, 11, 36, 0.7);
+  color: #ff2bd6;
+}
+
+.picker-panel {
+  min-height: 0;
+  border-radius: 16px;
+  border: 1px solid rgba(168, 85, 255, 0.28);
+  background: rgba(22, 11, 36, 0.92);
+  box-shadow:
+    0 10px 20px -4px rgba(0, 0, 0, 0.35),
+    inset 0 0 10px rgba(168, 85, 255, 0.12);
+  padding: 1rem;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.picker-grid {
+  flex: 1;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 0.75rem;
+  align-content: start;
+  padding-right: 0.15rem;
+}
+
+@media (max-width: 1100px) {
+  .picker-grid {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 900px) {
+  .picker-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .picker-segments {
+    display: none;
+  }
+}
+
+.picker-empty {
+  grid-column: 1 / -1;
+  display: grid;
+  place-items: center;
+  min-height: 12rem;
+  color: #5c4a6e;
+  font-size: 0.875rem;
+}
+
+.app-tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+  padding: 0.75rem 0.6rem 0.6rem;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(22, 11, 36, 0.55);
+  color: #f8f0ff;
+  transition: border-color 0.15s ease, background 0.15s ease, opacity 0.15s ease;
+}
+
+.app-tile:hover:not(:disabled) {
+  border-color: rgba(255, 43, 214, 0.45);
+  background: rgba(22, 11, 36, 0.7);
+}
+
+.app-tile--selected {
+  border-color: rgba(255, 43, 214, 0.9);
+  border-width: 1.5px;
+  background: rgba(22, 11, 36, 0.65);
+}
+
+.app-tile--added {
+  opacity: 0.85;
+  cursor: default;
+}
+
+.app-tile--disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.app-tile--skeleton {
+  pointer-events: none;
+  border-color: rgba(255, 255, 255, 0.06);
+  background: rgba(22, 11, 36, 0.4);
+}
+
+.app-tile-check {
+  position: absolute;
+  top: 0.35rem;
+  right: 0.35rem;
+  width: 1.125rem;
+  height: 1.125rem;
+  border-radius: 999px;
+  background: #ff2bd6;
+  color: #fff;
+  font-size: 0.65rem;
+  line-height: 1.125rem;
+  text-align: center;
+}
+
+.app-tile-icon-img,
+.app-tile-icon-letter {
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 12px;
+  flex-shrink: 0;
+}
+
+.app-tile-icon-img {
+  object-fit: contain;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.app-tile-icon-img.is-muted,
+.app-tile-icon-letter.is-muted {
+  filter: grayscale(0.35);
+  opacity: 0.75;
+}
+
+.app-tile-icon-letter {
+  display: grid;
+  place-items: center;
+  font-size: 1.125rem;
+  font-weight: 600;
+}
+
+.app-tile-name {
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: center;
+  font-size: 0.75rem;
+  line-height: 1.2;
+}
+
+.app-tile-source {
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: center;
+  font-size: 0.5625rem;
+  color: #5c4a6e;
+  line-height: 1.2;
+}
+
+.app-tile-source.is-added {
+  color: rgba(46, 230, 166, 0.85);
+}
+
+.app-skel-icon {
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 12px;
+  background: rgba(40, 30, 55, 0.7);
+}
+
+.app-skel-name {
+  width: 70%;
+  height: 0.55rem;
+  border-radius: 4px;
+  background: rgba(40, 30, 55, 0.55);
+}
+
+.app-skel-source {
+  width: 45%;
+  height: 0.4rem;
+  border-radius: 4px;
+  background: rgba(40, 30, 55, 0.4);
+}
+
+.picker-manual-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.25rem;
+}
+
+.picker-manual-link {
+  border: none;
+  background: transparent;
+  color: #9b87b0;
+  font-size: 0.75rem;
+  padding: 0.35rem 0.5rem;
+}
+
+.picker-manual-link:hover:not(:disabled) {
+  color: #ff2bd6;
+}
+
+.picker-manual-link:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.picker-modal {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  background: rgba(5, 3, 10, 0.55);
+  padding: 1rem;
+}
+
+.picker-sheet {
+  width: min(100%, 26rem);
+  border-radius: 16px;
+  border: 1px solid rgba(255, 43, 214, 0.45);
+  background: rgba(22, 11, 36, 0.96);
+  box-shadow: 0 12px 32px -4px rgba(0, 0, 0, 0.45);
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.picker-sheet-title {
+  margin: 0;
+  color: #f8f0ff;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.picker-field input {
+  width: 100%;
+  height: 2.25rem;
+  padding: 0 0.75rem;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(8, 5, 16, 0.8);
+  color: #f8f0ff;
+  font-size: 0.75rem;
+  outline: none;
+}
+
+.picker-field input::placeholder {
+  color: #5c4a6e;
+}
+
+.picker-field input:focus {
+  border-color: rgba(255, 43, 214, 0.45);
+}
+
+.picker-sheet-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+

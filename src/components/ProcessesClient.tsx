@@ -47,8 +47,15 @@ function memClass(mb: number): string {
   return mb >= 700 ? "text-[#FFB020]" : "text-[#80738C]";
 }
 
-export function ProcessesClient({ onBack }: { onBack?: () => void }) {
-  const [data, setData] = useState<ProcessListPayload | null>(null);
+export function ProcessesClient({
+  onBack,
+  initialData = null,
+}: {
+  onBack?: () => void;
+  /** Prefetched on homepage so the overlay never opens empty. */
+  initialData?: ProcessListPayload | null;
+}) {
+  const [data, setData] = useState<ProcessListPayload | null>(initialData);
   const [err, setErr] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<SortKey>("cpu");
@@ -56,6 +63,10 @@ export function ProcessesClient({ onBack }: { onBack?: () => void }) {
   const [killingPid, setKillingPid] = useState<number | null>(null);
   const [killMsg, setKillMsg] = useState<{ text: string; ok: boolean } | null>(null);
   const [pending, startTransition] = useTransition();
+
+  useEffect(() => {
+    if (initialData) setData(initialData);
+  }, [initialData]);
 
   const load = useCallback(() => {
     startTransition(() => {
@@ -72,10 +83,10 @@ export function ProcessesClient({ onBack }: { onBack?: () => void }) {
   }, []);
 
   useEffect(() => {
-    load();
+    if (!initialData) load();
     const id = window.setInterval(load, 2500);
     return () => window.clearInterval(id);
-  }, [load]);
+  }, [load, initialData]);
 
   const rows = useMemo(() => {
     const list = data?.processes ?? [];

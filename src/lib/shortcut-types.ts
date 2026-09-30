@@ -1,4 +1,4 @@
-export const MAX_SHORTCUTS = 7;
+export const MAX_SHORTCUTS = 8;
 
 export type QuickShortcut = {
   id: string;
